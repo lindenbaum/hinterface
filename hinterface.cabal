@@ -1,6 +1,6 @@
 name:                hinterface
 version:             0.1.0.0
-synopsis:            Initial project template from stack
+synopsis:            Haskell / Erlang interoperability library
 description:         Please see README.md
 homepage:            https://github.com/LTI2000/hinterface
 license:             BSD3
