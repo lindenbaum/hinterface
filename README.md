@@ -2,4 +2,6 @@
 
 # hinterface - Haskell / Erlang interoperability library
 
-Inspired by Jinterface, a set of tools for communication with Erlang processes from within Java.
+Inspired by Jinterface (Java), a set of tools for communication with Erlang processes.
+
+This is work in progress, the library isn't usable yet.
