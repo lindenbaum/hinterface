@@ -33,23 +33,26 @@ alive2_resp = 121
 
 --------------------------------------------------------------------------------
 
+data NamesResponse = NamesResponse Word32 BS.ByteString
+
+instance Show NamesResponse where
+  show (NamesResponse epmdPortNo nodeInfos) = "Epmd Port: " ++ show epmdPortNo
+
 putEpmdNamesRequest :: Put
 putEpmdNamesRequest = do
   putWord8 names_req
 
-getEpmdNamesResponse :: Get (Word32, BS.ByteString)
+getEpmdNamesResponse :: Get NamesResponse
 getEpmdNamesResponse = do
-  epmdPortNo <- getWord32be
-  nodeInfos <- getRemainingLazyByteString
-  return (epmdPortNo, BL.toStrict nodeInfos)
+  NamesResponse <$> getWord32be <*> (BL.toStrict <$> getRemainingLazyByteString)
 
-epmdNames :: BS.ByteString -> IOx (Word32, BS.ByteString)
+epmdNames :: BS.ByteString -> IOx NamesResponse
 epmdNames hostName = do
   sock <- connectSocket hostName epmdPort >>= makeBuffered
   runPutSocket sock (putWithLength16be putEpmdNamesRequest)
-  (epmdPortNo, nodeInfos) <- runGetSocket sock getEpmdNamesResponse
+  namesResponse <- runGetSocket sock getEpmdNamesResponse
   socketClose sock
-  return (epmdPortNo, nodeInfos)
+  return namesResponse
 
 --------------------------------------------------------------------------------
 

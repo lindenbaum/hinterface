@@ -30,7 +30,7 @@ main = fromIOx $ do
 
 mainX :: IOx ()
 mainX = do
-  epmdNames "localhost.localdomain" >>= printEpmdNamesResponse
+  epmdNames "localhost.localdomain" >>= printX
   liftIOx $ putStrLn ""
 
   localNode <- newLocalNode "hay@localhost.localdomain" "cookie"

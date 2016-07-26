@@ -9,6 +9,7 @@ module Util.IOx ( RawIO
                 , forkIOx
                 , killThreadX
                 , atomicallyX
+                , printX
                 , logX
                 , doesNotExistErrorType
                 , alreadyExistsErrorType
@@ -57,6 +58,9 @@ killThreadX = toIOx . killThread
 
 atomicallyX :: STM a -> IOx a
 atomicallyX = toIOx . atomically
+
+printX :: (Show a) => a -> IOx ()
+printX = liftIOx . print
 
 logX :: String -> IOError -> IOx ()
 logX msg x = toIOx $ do
