@@ -1,8 +1,11 @@
-module Language.Erlang.Epmd ( epmdNames
-                            , lookupNode
-                            , registerNode
-                            )
-       where
+module Language.Erlang.Epmd (
+  -- * List registered nodes
+  epmdNames,
+  -- * Looking up nodes
+  lookupNode,
+  -- * Registering nodes
+  registerNode
+  ) where
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
@@ -46,7 +49,9 @@ getEpmdNamesResponse :: Get NamesResponse
 getEpmdNamesResponse = do
   NamesResponse <$> getWord32be <*> (BL.toStrict <$> getRemainingLazyByteString)
 
-epmdNames :: BS.ByteString -> IOx NamesResponse
+-- | List all registered nodes
+epmdNames :: BS.ByteString -- ^ hostname
+          -> IOx NamesResponse
 epmdNames hostName = do
   sock <- connectSocket hostName epmdPort >>= makeBuffered
   runPutSocket sock (putWithLength16be putEpmdNamesRequest)

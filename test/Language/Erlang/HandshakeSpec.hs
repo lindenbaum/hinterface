@@ -20,12 +20,12 @@ spec = do
   describe "Name" $ do
     it "encodes/decodes properly" $ property $ do
       v <- arbitraryBoundedEnum
-      f <- (nub . sort) <$> listOf arbitraryBoundedEnum
+      f <- (DistributionFlags . nub . sort) <$> listOf arbitraryBoundedEnum
       n <- BS.pack <$> listOf arbitrary
       let a = Name v f n
       return $ (decode . encode) a `shouldBe` a
     it "encodes to XXX" $
-      encode (Name R6B [] "name") `shouldBe` (LBS.pack [0, 11, fromIntegral $ ord 'n', 0, 5, 0, 0, 0, 0] `LBS.append` "name")
+      encode (Name R6B (DistributionFlags []) "name") `shouldBe` (LBS.pack [0, 11, fromIntegral $ ord 'n', 0, 5, 0, 0, 0, 0] `LBS.append` "name")
 
   describe "Status" $ do
     it "encodes/decodes properly" $ property $ do
@@ -45,7 +45,7 @@ spec = do
   describe "Challenge" $ do
     it "encodes/decodes properly" $ property $ do
       v <- arbitraryBoundedEnum
-      f <- (nub . sort) <$> listOf arbitraryBoundedEnum
+      f <- (DistributionFlags . nub . sort) <$> listOf arbitraryBoundedEnum
       c <- arbitrary
       n <- BS.pack <$> listOf arbitrary
       let a = Challenge v f c n
