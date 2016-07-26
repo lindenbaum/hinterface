@@ -1,35 +1,41 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Language.Erlang.Term ( Term()
-                            , ToTerm(..)
-                            , FromTerm(..)
-                            , integer
-                            , float
-                            , atom
-                            , port
-                            , pid
-                            , tuple
-                            , string
-                            , list
-                            , improperList
-                            , ref
-                            , is_integer
-                            , is_float
-                            , is_atom
-                            , is_reference
-                            , is_port
-                            , is_pid
-                            , is_tuple
-                            , is_map
-                            , is_list
-                            , is_binary
-                            , length
-                            , element
-                            , splitNodeName
-                            , putTerm
-                            , getTerm
-                            )
-       where
+module Language.Erlang.Term (
+  -- * External Term Format
+  Term()
+  , putTerm
+  , getTerm
+    -- ** Conversion to and from External Term Format
+  , ToTerm(..)
+  , FromTerm(..)
+    -- ** Constructors
+  , integer
+  , float
+  , atom
+  , port
+  , pid
+  , tuple
+  , string
+  , list
+  , improperList
+  , ref
+    -- ** Recognizers
+  , is_integer
+  , is_float
+  , is_atom
+  , is_reference
+  , is_port
+  , is_pid
+  , is_tuple
+  , is_map
+  , is_list
+  , is_binary
+    -- ** Accessors
+  , length
+  , element
+    -- ** Utilities
+  , splitNodeName
+  ) where
 
 import Prelude hiding (id, length)
 import qualified Prelude as P (id)
@@ -170,78 +176,115 @@ class FromTerm a where
 
 --------------------------------------------------------------------------------
 
-integer :: Integer -> Term
+-- | Construct an integer
+integer :: Integer -- ^ Int
+        -> Term
 integer = Integer
 
-float :: Double -> Term
+-- | Construct a float
+float :: Double -- ^ IEEE float
+      -> Term
 float = Float
 
-atom :: ByteString -> Term
+-- | Construct an atom
+atom :: ByteString -- ^ AtomName
+     -> Term
 atom = Atom
 
 -- reference
 
-port :: ByteString -> Word32 -> Word8 -> Term
+-- | Construct a port
+port :: ByteString -- ^ Node name
+     -> Word32     -- ^ ID
+     -> Word8      -- ^ Creation
+     -> Term
 port = Port
 
-pid :: ByteString -> Word32 -> Word32 -> Word8 -> Term
+pid :: ByteString
+    ->  Word32
+    ->  Word32
+    ->  Word8
+    ->  Term
 pid = Pid
 
-tuple :: [Term] -> Term
+-- | Construct a tuple
+tuple :: [Term] -- ^ Elements
+      -> Term
 tuple = Tuple . fromList
 
 -- map
 
-string :: ByteString -> Term
+-- | Construct a list
+string :: ByteString -- ^ Characters
+       -> Term
 string = String
 
-list :: [Term] -> Term
+-- | Construct a list
+list :: [Term] -- ^ Elements
+     -> Term
 list [] = Nil
 list ts = improperList ts Nil
 
-improperList :: [Term] -> Term -> Term
+-- | Construct an improper list (if Tail is not Nil)
+improperList :: [Term] -- ^ Elements
+             -> Term   -- ^ Tail
+             -> Term
 improperList [] _ = error "Illegal improper list"
 improperList ts t = List (fromList ts) t -- FIXME could check if is string
 
 -- binary
 
-ref ::ByteString -> Word8 -> [Word32] -> Term
+-- | Construct a new reference
+ref :: ByteString -- ^ Node name
+    ->  Word8     -- ^ Creation
+    ->  [Word32]  -- ^ ID ...
+    ->  Term
 ref = NewReference
 
 --------------------------------------------------------------------------------
 
 is_integer, is_float, is_atom, is_reference, is_port, is_pid, is_tuple, is_map, is_list, is_binary :: Term -> Bool
 
+-- | Test if term is an integer
 is_integer (Integer _) = True
 is_integer _           = False
 
+-- | Test if term is a float
 is_float (Float _) = True
 is_float _         = False
 
+-- | Test if term is an atom
 is_atom (Atom _) = True
 is_atom _        = False
 
+-- | Test if term is a reference
 is_reference (Reference _ _ _)     = True
 is_reference (NewReference  _ _ _) = True
 is_reference _                     = False
 
+-- | Test if term is a port
 is_port (Port _ _ _) = True
 is_port _            = False
 
+-- | Test if term is a pid
 is_pid (Pid _ _ _ _) = True
 is_pid _             = False
 
+-- | Test if term is a tuple
 is_tuple (Tuple _) = True
 is_tuple _         = False
 
+-- | Test if term is a map
 is_map (Map _) = True
 is_map _       = False
 
+-- | Test if term is a list
 is_list Nil        = True
 is_list (String _) = True
 is_list (List _ _) = True
 is_list _          = False
 
+-- | Test if term is a binary
 is_binary (Binary _) = True
 is_binary _          = False
 
