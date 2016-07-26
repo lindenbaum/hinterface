@@ -20,7 +20,7 @@ spec = do
   describe "Name" $ do
     it "encodes/decodes properly" $ property $ do
       v <- arbitraryBoundedEnum
-      f <- DistributionFlags <$> (nub . sort) <$> listOf arbitraryBoundedEnum
+      f <- (DistributionFlags . nub . sort) <$> listOf arbitraryBoundedEnum
       n <- BS.pack <$> listOf arbitrary
       let a = Name v f n
       return $ (decode . encode) a `shouldBe` a
@@ -45,7 +45,7 @@ spec = do
   describe "Challenge" $ do
     it "encodes/decodes properly" $ property $ do
       v <- arbitraryBoundedEnum
-      f <- DistributionFlags <$> (nub . sort) <$> listOf arbitraryBoundedEnum
+      f <- (DistributionFlags . nub . sort) <$> listOf arbitraryBoundedEnum
       c <- arbitrary
       n <- BS.pack <$> listOf arbitrary
       let a = Challenge v f c n

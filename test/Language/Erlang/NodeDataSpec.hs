@@ -46,7 +46,7 @@ spec = do
 
   describe "DistributionFlags" $ do
     it "encodes/decodes properly" $ property $ do
-      a <- DistributionFlags <$> (nub . sort) <$> listOf arbitraryBoundedEnum :: Gen DistributionFlags
+      a <- (DistributionFlags . nub . sort) <$> listOf arbitraryBoundedEnum :: Gen DistributionFlags
       return $ (decode . encode) a `shouldBe` a
     it "[] encodes to 0x00000" $
       encode (DistributionFlags []) `shouldBe` encode (0x00000 :: Word32)

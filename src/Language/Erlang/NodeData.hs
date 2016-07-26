@@ -75,7 +75,7 @@ instance Binary DistributionFlags where
         toBits = foldl (flip $ (.|.) . toBit) 0
 
   get = do
-    DistributionFlags <$> (fromBits <$> getWord32be)
+    (DistributionFlags . fromBits) <$> getWord32be
       where
         fromBits :: Word32 -> [DistributionFlag]
         fromBits bits = [flag | flag <- [minBound..maxBound], bits .&. toBit flag /= 0]
