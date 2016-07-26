@@ -3,9 +3,7 @@
 module Language.Erlang.NodeData ( DistributionVersion(..)
                                 , matchDistributionVersion
                                 , DistributionFlag(..)
-                                , DistributionFlags
-                                , putDistributionFlags
-                                , getDistributionFlags
+                                , DistributionFlags(..)
                                 , NodeType(..)
                                 , NodeProtocol(..)
                                 , NodeData(..)
@@ -66,21 +64,21 @@ data DistributionFlag = PUBLISHED            --  The node should be published an
                       | UTF8_ATOMS           --  The node understand UTF-8 encoded atoms
                       deriving (Eq, Show, Enum, Bounded, Ord)
 
-type DistributionFlags = [DistributionFlag]
+newtype DistributionFlags = DistributionFlags [DistributionFlag]
+                          deriving (Eq, Show)
 
-putDistributionFlags :: DistributionFlags -> Put
-putDistributionFlags flags = do
-  putWord32be $ toBits flags
-    where
-      toBits :: DistributionFlags -> Word32
-      toBits = foldl (flip $ (.|.) . toBit) 0
+instance Binary DistributionFlags where
+  put (DistributionFlags flags) = do
+    putWord32be $ toBits flags
+      where
+        toBits :: [DistributionFlag] -> Word32
+        toBits = foldl (flip $ (.|.) . toBit) 0
 
-getDistributionFlags :: Get DistributionFlags
-getDistributionFlags = do
-  fromBits <$> getWord32be
-    where
-      fromBits :: Word32 -> DistributionFlags
-      fromBits bits = [flag | flag <- [minBound..maxBound], bits .&. toBit flag /= 0]
+  get = do
+    DistributionFlags <$> (fromBits <$> getWord32be)
+      where
+        fromBits :: Word32 -> [DistributionFlag]
+        fromBits bits = [flag | flag <- [minBound..maxBound], bits .&. toBit flag /= 0]
 
 toBit :: DistributionFlag -> Word32
 toBit PUBLISHED           = 0x00001

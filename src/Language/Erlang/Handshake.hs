@@ -52,12 +52,12 @@ instance Binary Name where
   put Name {..} = putWithLength16be $ do
     putChar8 nodeTypeR6
     put n_distVer
-    putDistributionFlags n_distFlags
+    put n_distFlags
     putByteString n_nodeName
 
   get = do
     len <- getWord16be
-    (((), version, flags), l) <- getWithLength16be $ (,,) <$> matchChar8 nodeTypeR6 <*> get <*>  getDistributionFlags
+    (((), version, flags), l) <- getWithLength16be $ (,,) <$> matchChar8 nodeTypeR6 <*> get <*>  get
     name <- getByteString (fromIntegral (len - l))
     return $ Name version flags name
 
@@ -105,13 +105,13 @@ instance Binary Challenge where
   put Challenge {..} = putWithLength16be $ do
     putChar8 nodeTypeR6
     put c_distVer
-    putDistributionFlags c_distFlags
+    put c_distFlags
     putWord32be c_challenge
     putByteString c_nodeName
 
   get = do
     len <- getWord16be
-    (((), version, flags, challenge), l) <- getWithLength16be $ (,,,) <$> matchChar8 nodeTypeR6 <*> get <*> getDistributionFlags <*> getWord32be
+    (((), version, flags, challenge), l) <- getWithLength16be $ (,,,) <$> matchChar8 nodeTypeR6 <*> get <*> get <*> getWord32be
     name <- getByteString (fromIntegral (len - l))
     return $ Challenge version flags challenge name
 

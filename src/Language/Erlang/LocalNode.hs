@@ -45,7 +45,7 @@ newLocalNode :: Term ->  BS.ByteString -> IOx LocalNode
 newLocalNode nodeName cookie = do
   let (aliveName, hostName) = splitNodeName nodeName
       nodeData = NodeData 0 HiddenNode TcpIpV4 R6B R6B aliveName ""
-      localFlags = [EXTENDED_REFERENCES, EXTENDED_PIDS_PORTS, BIT_BINARIES, NEW_FLOATS, FUN_TAGS, NEW_FUN_TAGS]
+      localFlags = DistributionFlags [EXTENDED_REFERENCES, FUN_TAGS, NEW_FUN_TAGS, EXTENDED_PIDS_PORTS, BIT_BINARIES, NEW_FLOATS]
   (sock, creation) <- registerNode nodeData hostName
 
   LocalNode                      <$>
