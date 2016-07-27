@@ -4,23 +4,13 @@ module Main ( main
 
 import Prelude hiding (length)
 
-import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as CS
-import Data.Word
-import Data.Char
 
 import Util.IOx
 import Language.Erlang.Epmd
 import Language.Erlang.LocalNode
 import Language.Erlang.Term
 import Language.Erlang.Mailbox
-
---------------------------------------------------------------------------------
-
-printEpmdNamesResponse :: (Word32, BS.ByteString) -> IOx ()
-printEpmdNamesResponse (epmdPortNo, nodeInfos) = toIOx $ do
-  putStr "Epmd Port: " ; print epmdPortNo
-  mapM_ putStrLn (lines (map (chr . fromIntegral) (BS.unpack nodeInfos)))
 
 --------------------------------------------------------------------------------
 

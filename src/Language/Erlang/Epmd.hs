@@ -1,14 +1,16 @@
 module Language.Erlang.Epmd (
   -- * List registered nodes
   epmdNames,
+  NamesResponse(..),
   -- * Looking up nodes
   lookupNode,
   -- * Registering nodes
-  registerNode
+  registerNode,
+  RegisterNodeResponse(..)
   ) where
 
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Char8 as CL
 import Data.Binary
 import Data.Binary.Put
 import Data.Binary.Get
@@ -36,10 +38,8 @@ alive2_resp = 121
 
 --------------------------------------------------------------------------------
 
-data NamesResponse = NamesResponse Word32 BS.ByteString
-
-instance Show NamesResponse where
-  show (NamesResponse epmdPortNo nodeInfos) = "Epmd Port: " ++ show epmdPortNo
+data NamesResponse = NamesResponse Word16 [String]
+                   deriving (Eq, Show)
 
 putEpmdNamesRequest :: Put
 putEpmdNamesRequest = do
@@ -47,7 +47,9 @@ putEpmdNamesRequest = do
 
 getEpmdNamesResponse :: Get NamesResponse
 getEpmdNamesResponse = do
-  NamesResponse <$> getWord32be <*> (BL.toStrict <$> getRemainingLazyByteString)
+  epmdPortNo <- getWord32be
+  nodeInfos <- getRemainingLazyByteString
+  return $ NamesResponse (fromIntegral epmdPortNo) (map CL.unpack (filter (not . CL.null) (CL.lines nodeInfos)))
 
 -- | List all registered nodes
 epmdNames :: BS.ByteString -- ^ hostname
@@ -87,6 +89,8 @@ lookupNode alive hostName = do
 
 --------------------------------------------------------------------------------
 
+data RegisterNodeResponse = RegisterNodeResponse BufferedSocket Word16
+
 putRegisterNodeRequest :: NodeData -> Put
 putRegisterNodeRequest node = do
   putWord8 alive2_req
@@ -101,16 +105,15 @@ getRegisterNodeResponse = do
   else do
     creation <- getWord16be
     return (Just creation)
---------------------------------------------------------------------------------
 
-registerNode :: NodeData -> BS.ByteString -> IOx (BufferedSocket, Word16)
+registerNode :: NodeData -> BS.ByteString -> IOx RegisterNodeResponse
 registerNode node hostName = do
   sock <- connectSocket hostName epmdPort >>= makeBuffered
   runPutSocket sock (putWithLength16be (putRegisterNodeRequest node))
   r <- runGetSocket sock getRegisterNodeResponse
   case r of
     (Just creation) -> do
-      return (sock, creation) -- FIXME return RegisteredNode
+      return $ RegisterNodeResponse sock creation
     Nothing -> do
       socketClose sock
       errorX alreadyExistsErrorType (show $ aliveName node)
