@@ -75,7 +75,7 @@ instance Binary NamesResponse where
 epmdNames :: BS.ByteString -- ^ hostname
           -> IOx NamesResponse
 epmdNames hostName = do
-  yyy hostName xxx NamesRequest
+  withBufferedSocket hostName $ sendRequest NamesRequest
 
 --------------------------------------------------------------------------------
 
@@ -110,7 +110,7 @@ lookupNode :: BS.ByteString -- ^ alive
            -> BS.ByteString -- ^ hostname
            -> IOx NodeData
 lookupNode alive hostName = do
-  LookupNodeResponse r <- yyy hostName xxx (LookupNodeRequest alive)
+  LookupNodeResponse r <- withBufferedSocket hostName $ sendRequest (LookupNodeRequest alive)
   case r of
    (Just n) -> return n
    Nothing  -> errorX doesNotExistErrorType (show alive)
@@ -152,8 +152,8 @@ registerNode :: NodeData -- ^ node
              -> BS.ByteString -- ^ hostName
              -> IOx NodeRegistration
 registerNode node hostName = do
-  sock <- connectSocket hostName epmdPort >>= makeBuffered
-  RegisterNodeResponse r <- xxx sock (RegisterNodeRequest node)
+  sock <- connectBufferedSocket hostName
+  RegisterNodeResponse r <- sendRequest (RegisterNodeRequest node) sock
   case r of
     (Just creation) -> do
       return $ NodeRegistration sock creation
@@ -163,19 +163,23 @@ registerNode node hostName = do
 
 --------------------------------------------------------------------------------
 
-xxx :: (Binary a, Binary b)  => BufferedSocket
-    -> a
-    -> IOx b
-xxx sock req = do
+sendRequest :: (Binary a, Binary b) => a
+            -> BufferedSocket
+            -> IOx b
+sendRequest req sock = do
   runPutSocket sock $ put req
   runGetSocket sock get
 
-yyy :: (Binary a, Binary b) => BS.ByteString -- ^ hostName
-    -> (BufferedSocket -> a -> IOx b)
-    -> a
-    -> IOx b
-yyy hostName f req = do
-  sock <- connectSocket hostName epmdPort >>= makeBuffered
-  res <- f sock req
+connectBufferedSocket :: BS.ByteString -- ^ hostName
+                      -> IOx BufferedSocket
+connectBufferedSocket hostName = do
+  connectSocket hostName epmdPort >>= makeBuffered
+
+withBufferedSocket :: (Binary b) => BS.ByteString -- ^ hostName
+                   -> (BufferedSocket -> IOx b)
+                   -> IOx b
+withBufferedSocket hostName f = do
+  sock <- connectBufferedSocket hostName
+  res <- f sock
   socketClose sock
   return res
