@@ -6,7 +6,7 @@ module Language.Erlang.Epmd (
   lookupNode,
   -- * Registering nodes
   registerNode,
-  RegisterNodeResponse(..)
+  NodeRegistration(..)
   ) where
 
 import qualified Data.ByteString as BS
@@ -14,6 +14,7 @@ import qualified Data.ByteString.Lazy.Char8 as CL
 import Data.Binary
 import Data.Binary.Put
 import Data.Binary.Get
+import Data.Maybe
 
 import Util.IOx
 import Util.BufferedSocket
@@ -38,84 +39,143 @@ alive2_resp = 121
 
 --------------------------------------------------------------------------------
 
-data NamesResponse = NamesResponse Word16 [String]
+data NamesRequest = NamesRequest
+                  deriving (Eq, Show)
+
+instance Binary NamesRequest where
+ put _ = putWithLength16be $ do
+   putWord8 names_req
+
+ get = undefined
+
+
+data NodeInfo = NodeInfo String Word16
+              deriving (Eq, Show)
+
+
+data NamesResponse = NamesResponse Word16 [NodeInfo]
                    deriving (Eq, Show)
 
-putEpmdNamesRequest :: Put
-putEpmdNamesRequest = do
-  putWord8 names_req
+instance Binary NamesResponse where
+  put _ = undefined
 
-getEpmdNamesResponse :: Get NamesResponse
-getEpmdNamesResponse = do
-  epmdPortNo <- getWord32be
-  nodeInfos <- getRemainingLazyByteString
-  return $ NamesResponse (fromIntegral epmdPortNo) (map CL.unpack (filter (not . CL.null) (CL.lines nodeInfos)))
+  get = do
+    epmdPortNo <- getWord32be
+    nodeInfos <- getRemainingLazyByteString
+    return $ NamesResponse (fromIntegral epmdPortNo) (catMaybes (map nodeInfo (CL.lines nodeInfos)))
+      where
+        nodeInfo :: CL.ByteString -> Maybe NodeInfo
+        nodeInfo cl = do
+          ["name", name, "at", "port", portString] <- Just $ CL.split ' ' cl
+          (port, "") <- CL.readInt portString
+          return $ NodeInfo (CL.unpack name) (fromIntegral port)
+
 
 -- | List all registered nodes
 epmdNames :: BS.ByteString -- ^ hostname
           -> IOx NamesResponse
 epmdNames hostName = do
-  sock <- connectSocket hostName epmdPort >>= makeBuffered
-  runPutSocket sock (putWithLength16be putEpmdNamesRequest)
-  namesResponse <- runGetSocket sock getEpmdNamesResponse
-  socketClose sock
-  return namesResponse
+  yyy hostName xxx NamesRequest
 
 --------------------------------------------------------------------------------
 
-putLookupNodeRequest :: BS.ByteString -> Put
-putLookupNodeRequest alive = do
-  putWord8 port_please2_req
-  putByteString alive
+data LookupNodeRequest = LookupNodeRequest BS.ByteString
+                       deriving (Eq, Show)
 
-getLookupNodeResponse :: Get (Maybe NodeData)
-getLookupNodeResponse = do
-  matchWord8 port_please2_resp
-  result <- getWord8
-  if result > 0 then do
-    return Nothing
-  else do
-    Just <$> get
+instance Binary LookupNodeRequest where
+  put (LookupNodeRequest alive) = putWithLength16be $ do
+    putWord8 port_please2_req
+    putByteString alive
 
-lookupNode :: BS.ByteString -> BS.ByteString -> IOx NodeData
+  get = undefined
+
+
+data LookupNodeResponse = LookupNodeResponse (Maybe NodeData)
+                        deriving (Eq, Show)
+
+instance Binary LookupNodeResponse where
+  put _ = undefined
+
+  get = LookupNodeResponse <$> do
+    matchWord8 port_please2_resp
+    result <- getWord8
+    if result > 0 then do
+      return $ Nothing
+    else do
+      Just <$> get
+
+
+-- | Lookup a node
+lookupNode :: BS.ByteString -- ^ alive
+           -> BS.ByteString -- ^ hostname
+           -> IOx NodeData
 lookupNode alive hostName = do
-  sock <- connectSocket hostName epmdPort >>= makeBuffered
-  runPutSocket sock (putWithLength16be (putLookupNodeRequest alive))
-  r <- runGetSocket sock getLookupNodeResponse
-  socketClose sock
+  LookupNodeResponse r <- yyy hostName xxx (LookupNodeRequest alive)
   case r of
    (Just n) -> return n
    Nothing  -> errorX doesNotExistErrorType (show alive)
 
 --------------------------------------------------------------------------------
 
-data RegisterNodeResponse = RegisterNodeResponse BufferedSocket Word16
+data RegisterNodeRequest = RegisterNodeRequest NodeData
+                         deriving (Eq, Show)
 
-putRegisterNodeRequest :: NodeData -> Put
-putRegisterNodeRequest node = do
-  putWord8 alive2_req
-  put node
+instance Binary RegisterNodeRequest where
+  put (RegisterNodeRequest node) = putWithLength16be $ do
+    putWord8 alive2_req
+    put node
 
-getRegisterNodeResponse :: Get (Maybe Word16)
-getRegisterNodeResponse = do
-  matchWord8 alive2_resp
-  result <- getWord8
-  if result > 0 then do
-    return Nothing
-  else do
-    creation <- getWord16be
-    return (Just creation)
+  get = undefined
 
-registerNode :: NodeData -> BS.ByteString -> IOx RegisterNodeResponse
+
+data RegisterNodeResponse = RegisterNodeResponse (Maybe Word16)
+                         deriving (Eq, Show)
+
+instance Binary RegisterNodeResponse where
+  put _ = undefined
+
+  get =  RegisterNodeResponse <$> do
+    matchWord8 alive2_resp
+    result <- getWord8
+    if result > 0 then do
+      return Nothing
+    else do
+      creation <- getWord16be
+      return (Just creation)
+
+
+data NodeRegistration = NodeRegistration BufferedSocket Word16
+
+
+-- | Register a node
+registerNode :: NodeData -- ^ node
+             -> BS.ByteString -- ^ hostName
+             -> IOx NodeRegistration
 registerNode node hostName = do
   sock <- connectSocket hostName epmdPort >>= makeBuffered
-  runPutSocket sock (putWithLength16be (putRegisterNodeRequest node))
-  r <- runGetSocket sock getRegisterNodeResponse
+  RegisterNodeResponse r <- xxx sock (RegisterNodeRequest node)
   case r of
     (Just creation) -> do
-      return $ RegisterNodeResponse sock creation
+      return $ NodeRegistration sock creation
     Nothing -> do
       socketClose sock
       errorX alreadyExistsErrorType (show $ aliveName node)
 
 --------------------------------------------------------------------------------
+
+xxx :: (Binary a, Binary b)  => BufferedSocket
+    -> a
+    -> IOx b
+xxx sock req = do
+  runPutSocket sock $ put req
+  runGetSocket sock get
+
+yyy :: (Binary a, Binary b) => BS.ByteString -- ^ hostName
+    -> (BufferedSocket -> a -> IOx b)
+    -> a
+    -> IOx b
+yyy hostName f req = do
+  sock <- connectSocket hostName epmdPort >>= makeBuffered
+  res <- f sock req
+  socketClose sock
+  return res

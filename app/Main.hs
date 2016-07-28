@@ -21,9 +21,10 @@ main = fromIOx $ do
 mainX :: IOx ()
 mainX = do
   epmdNames "localhost.localdomain" >>= printX
-  liftIOx $ putStrLn ""
 
   localNode <- newLocalNode "hay@localhost.localdomain" "cookie"
+
+  epmdNames "localhost.localdomain" >>= printX
 
   mailbox <- make_mailbox localNode
   let self = getPid mailbox

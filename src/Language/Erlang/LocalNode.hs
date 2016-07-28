@@ -46,7 +46,7 @@ newLocalNode nodeName cookie = do
   let (aliveName, hostName) = splitNodeName nodeName
       nodeData = NodeData 0 HiddenNode TcpIpV4 R6B R6B aliveName ""
       localFlags = DistributionFlags [EXTENDED_REFERENCES, FUN_TAGS, NEW_FUN_TAGS, EXTENDED_PIDS_PORTS, BIT_BINARIES, NEW_FLOATS]
-  RegisterNodeResponse sock creation <- registerNode nodeData hostName
+  NodeRegistration sock creation <- registerNode nodeData hostName
 
   LocalNode                      <$>
     pure nodeData                <*>
