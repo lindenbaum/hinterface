@@ -184,10 +184,10 @@ handshake sock n cookie = do
 
     where
       send :: (Binary a) => a -> IOx ()
-      send = runPutSocket sock . put
+      send = runPutSocket2 sock
 
       recv :: (Binary a) => IOx a
-      recv = runGetSocket sock get
+      recv = runGetSocket2 sock
 
       checkVersion :: Name -> Challenge -> IOx ()
       checkVersion Name {n_distVer} Challenge {c_distVer} = do

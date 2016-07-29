@@ -167,8 +167,8 @@ sendRequest :: (Binary a, Binary b) => a
             -> BufferedSocket
             -> IOx b
 sendRequest req sock = do
-  runPutSocket sock $ put req
-  runGetSocket sock get
+  runPutSocket2 sock req
+  runGetSocket2 sock
 
 connectBufferedSocket :: BS.ByteString -- ^ hostName
                       -> IOx BufferedSocket

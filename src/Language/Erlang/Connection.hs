@@ -12,6 +12,8 @@ import Control.Monad
 import Control.Concurrent
 import Control.Concurrent.STM
 
+import Data.Binary
+
 import Util.BufferedSocket (BufferedSocket, socketClose)
 import Util.Util
 
@@ -72,7 +74,7 @@ sendLoop sock sendQueue = do
     where
       body = do
         controlMessage <- atomicallyX $ readTQueue sendQueue
-        runPutSocket sock $ putControlMessage controlMessage
+        runPutSocket2 sock controlMessage
 
 
 recvLoop :: BufferedSocket -> NodeState Term Term Mailbox Connection -> IOx ()
@@ -83,7 +85,7 @@ recvLoop sock nodeState = do
   return ()
     where
       body = do
-        controlMessage <- runGetSocket sock getControlMessage
+        controlMessage <- runGetSocket2 sock
         case controlMessage of
          LINK fromPid toPid -> do
            mailbox <- getMailboxForPid nodeState toPid
