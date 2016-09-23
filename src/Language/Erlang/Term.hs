@@ -33,6 +33,10 @@ module Language.Erlang.Term
       -- ** Accessors
     , length
     , element
+    , to_string
+    , to_integer
+    , match_atom
+    , match_tuple
       -- ** Utilities
     , splitNodeName
     ) where
@@ -318,6 +322,25 @@ length term = error $ "Bad arg for length: " ++ show term
 element :: Int -> Term -> Term
 element n (Tuple v) = v ! (n - 1)
 element _ term = error $ "Not a tuple: " ++ show term
+
+to_string :: Term -> Maybe ByteString
+to_string (String bs) = Just bs
+to_string _ = Nothing
+
+to_integer :: Term -> Maybe Integer
+to_integer (Integer i) =
+    Just i
+to_integer _ = Nothing
+
+match_tuple :: Term -> Maybe [Term]
+match_tuple (Tuple v) = Just (toList v)
+match_tuple _ = Nothing
+
+match_atom :: Term -> ByteString -> Maybe ByteString
+match_atom (Atom n) m
+    | m == n = Just n
+    | otherwise = Nothing
+match_atom _ _ = Nothing
 
 --------------------------------------------------------------------------------
 splitNodeName :: Term -> (ByteString, ByteString)
