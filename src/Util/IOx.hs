@@ -1,42 +1,43 @@
-module Util.IOx ( RawIO
-                , IOx
-                , errorX
-                , maybeErrorX
-                , catchX
-                , toIOx
-                , fromIOx
-                , liftIOx
-                , forkIOx
-                , killThreadX
-                , atomicallyX
-                , printX
-                , logX
-                , doesNotExistErrorType
-                , alreadyExistsErrorType
-                , illegalOperationErrorType
-                , userErrorType
-                )
-       where
+module Util.IOx
+    ( RawIO
+    , IOx
+    , errorX
+    , maybeErrorX
+    , catchX
+    , toIOx
+    , fromIOx
+    , liftIOx
+    , forkIOx
+    , killThreadX
+    , atomicallyX
+    , printX
+    , logX
+    , doesNotExistErrorType
+    , alreadyExistsErrorType
+    , illegalOperationErrorType
+    , userErrorType
+    ) where
 
-import System.IO.Error
+import           System.IO.Error
 
-import Control.Monad.Trans
-import Control.Monad.Trans.Either
+import           Control.Monad.Trans
+import           Control.Monad.Trans.Either
 
-import Control.Concurrent
-import Control.Concurrent.STM
+import           Control.Concurrent
+import           Control.Concurrent.STM
 
 --------------------------------------------------------------------------------
-
 type RawIO = IO
 
 type IOx = EitherT IOError RawIO
 
 errorX :: IOErrorType -> String -> IOx a
-errorX errorType location = left $ mkIOError errorType location Nothing Nothing
+errorX errorType location =
+    left $ mkIOError errorType location Nothing Nothing
 
 maybeErrorX :: IOErrorType -> String -> Maybe a -> IOx a
-maybeErrorX errorType location = maybe (errorX errorType location) (return)
+maybeErrorX errorType location =
+    maybe (errorX errorType location) (return)
 
 catchX :: IOx a -> (IOError -> IOx a) -> IOx a
 ma `catchX` handler = mapEitherT (>>= either (runEitherT . handler) (return . Right)) ma
@@ -64,6 +65,6 @@ printX = liftIOx . print
 
 logX :: String -> IOError -> IOx ()
 logX msg x = toIOx $ do
-  putStr msg
-  putStr ": "
-  print x
+    putStr msg
+    putStr ": "
+    print x

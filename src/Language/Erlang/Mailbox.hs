@@ -1,11 +1,7 @@
-module Language.Erlang.Mailbox ( Mailbox(..)
-                               )
-       where
+module Language.Erlang.Mailbox ( Mailbox(..) ) where
 
-import Util.IOx
-import Language.Erlang.Term
-
---------------------------------------------------------------------------------
+import           Util.IOx
+import           Language.Erlang.Term
 
 data Mailbox = Mailbox { getPid             :: Term
                        , deliverLink        :: Term -> IOx ()
@@ -18,5 +14,3 @@ data Mailbox = Mailbox { getPid             :: Term
                        , sendReg            :: Term -> Term -> Term -> IOx ()
                        , receive            :: IOx Term
                        }
-
---------------------------------------------------------------------------------

@@ -1,60 +1,64 @@
-module Main ( main
-            )
-       where
+module Main ( main ) where
 
-import Prelude hiding (length)
+import           Prelude                   hiding ( length )
 
-import qualified Data.ByteString.Char8 as CS
+import qualified Data.ByteString.Char8     as CS
 
-import Util.IOx
-import Language.Erlang.Epmd
-import Language.Erlang.LocalNode
-import Language.Erlang.Term
-import Language.Erlang.Mailbox
+import           Util.IOx
+import           Language.Erlang.Epmd
+import           Language.Erlang.LocalNode
+import           Language.Erlang.Term
+import           Language.Erlang.Mailbox
 
 --------------------------------------------------------------------------------
-
 main :: IO ()
 main = fromIOx $ do
-  mainX
+    mainX
 
 mainX :: IOx ()
 mainX = do
-  epmdNames "localhost.localdomain" >>= printX
+    epmdNames "localhost.localdomain" >>= printX
 
-  localNode <- newLocalNode "hay@localhost.localdomain" "cookie"
+    localNode <- newLocalNode "hay@localhost.localdomain" "cookie"
 
-  epmdNames "localhost.localdomain" >>= printX
+    epmdNames "localhost.localdomain" >>= printX
 
-  mailbox <- make_mailbox localNode
-  let self = getPid mailbox
+    mailbox <- make_mailbox localNode
+    let self = getPid mailbox
 
-  myPort <- make_port localNode
-  myRef <- make_ref localNode
-  let message = tuple [self, myRef, myPort, tuple [float 2.18, tuple [], list [], list [atom "a", atom "b", atom "c"]], string "hello!"]
-  liftIOx $ putStr "Message: "
-  liftIOx $ print message
-  liftIOx $ putStrLn ""
+    myPort <- make_port localNode
+    myRef <- make_ref localNode
+    let message = tuple [ self
+                        , myRef
+                        , myPort
+                        , tuple [ float 2.18, tuple [], list [], list [ atom "a", atom "b", atom "c" ] ]
+                        , string "hello!"
+                        ]
+    liftIOx $ putStr "Message: "
+    liftIOx $ print message
+    liftIOx $ putStrLn ""
 
-  sendReg mailbox "echo" "erl@localhost.localdomain" message
-  reply <- receive mailbox
-  liftIOx $ putStr "Reply: "
-  liftIOx $ print reply
-  liftIOx $ putStrLn ""
+    sendReg mailbox "echo" "erl@localhost.localdomain" message
+    reply <- receive mailbox
+    liftIOx $ putStr "Reply: "
+    liftIOx $ print reply
+    liftIOx $ putStrLn ""
 
-  liftIOx $ putStrLn "BYE"
+    liftIOx $ putStrLn "BYE"
 
-  closeLocalNode localNode
+    closeLocalNode localNode
 
 data Person = Person String Int
 
 instance ToTerm Person where
-  toTerm (Person name age) = tuple [string (CS.pack name), integer (fromIntegral age)]
+    toTerm (Person name age) =
+        tuple [ string (CS.pack name), integer (fromIntegral age) ]
 
 instance FromTerm Person where
-  fromTerm term
-    | is_tuple term &&
-      length term == 2 &&
-      (is_list $ element 1 term) &&
-      (is_integer $ element 2 term) = undefined
-    | otherwise                 = Nothing
+    fromTerm term
+        | is_tuple term &&
+              length term == 2 &&
+                  (is_list $ element 1 term) &&
+                      (is_integer $ element 2 term) =
+              undefined
+        | otherwise = Nothing
