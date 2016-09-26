@@ -1,6 +1,4 @@
-{-# LANGUAGE PackageImports  #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE NamedFieldPuns  #-}
+{-# LANGUAGE PackageImports #-}
 
 module Language.Erlang.Handshake
     ( connectNodes
@@ -50,11 +48,12 @@ data Name = Name { n_distVer   :: DistributionVersion
     deriving (Eq, Show)
 
 instance Binary Name where
-    put Name{..} = putWithLength16be $ do
-        putChar8 nodeTypeR6
-        put n_distVer
-        put n_distFlags
-        putByteString n_nodeName
+    put Name{n_distVer,n_distFlags,n_nodeName} =
+        putWithLength16be $ do
+            putChar8 nodeTypeR6
+            put n_distVer
+            put n_distFlags
+            putByteString n_nodeName
     get = do
         len <- getWord16be
         (((), version, flags), l) <- getWithLength16be $ (,,) <$> matchChar8 nodeTypeR6 <*> get <*> get
@@ -95,12 +94,13 @@ data Challenge = Challenge { c_distVer   :: DistributionVersion
     deriving (Eq, Show)
 
 instance Binary Challenge where
-    put Challenge{..} = putWithLength16be $ do
-        putChar8 nodeTypeR6
-        put c_distVer
-        put c_distFlags
-        putWord32be c_challenge
-        putByteString c_nodeName
+    put Challenge{c_distVer,c_distFlags,c_challenge,c_nodeName} =
+        putWithLength16be $ do
+            putChar8 nodeTypeR6
+            put c_distVer
+            put c_distFlags
+            putWord32be c_challenge
+            putByteString c_nodeName
     get = do
         len <- getWord16be
         (((), version, flags, challenge), l) <- getWithLength16be $
@@ -115,7 +115,7 @@ data ChallengeReply = ChallengeReply { cr_challenge :: Word32
     deriving (Eq, Show)
 
 instance Binary ChallengeReply where
-    put ChallengeReply{..} =
+    put ChallengeReply{cr_challenge,cr_digest} =
         putWithLength16be $ do
             putChar8 challengeReply
             putWord32be cr_challenge
@@ -131,9 +131,10 @@ data ChallengeAck = ChallengeAck { ca_digest :: BS.ByteString }
     deriving (Eq, Show)
 
 instance Binary ChallengeAck where
-    put ChallengeAck{..} = putWithLength16be $ do
-        putChar8 challengeAck
-        putByteString ca_digest
+    put ChallengeAck{ca_digest} =
+        putWithLength16be $ do
+            putChar8 challengeAck
+            putByteString ca_digest
     get = do
         len <- getWord16be
         ((), l) <- getWithLength16be $ matchChar8 challengeAck

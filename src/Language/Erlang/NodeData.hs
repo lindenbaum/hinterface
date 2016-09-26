@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-
 module Language.Erlang.NodeData
     ( DistributionVersion(..)
     , matchDistributionVersion
@@ -133,7 +131,7 @@ data NodeData = NodeData { portNo    :: Word16
 
 --------------------------------------------------------------------------------
 instance Binary NodeData where
-    put NodeData{..} = do
+    put NodeData{portNo,nodeType,protocol,hiVer,loVer,aliveName,extra} = do
         putWord16be portNo
         put nodeType
         put protocol
@@ -142,4 +140,4 @@ instance Binary NodeData where
         putLength16beByteString aliveName
         putLength16beByteString extra
     get = do
-        NodeData <$> getWord16be <*> get <*> get <*> get <*> get <*> getLength16beByteString <*> getLength16beByteString--------------------------------------------------------------------------------
+        NodeData <$> getWord16be <*> get <*> get <*> get <*> get <*> getLength16beByteString <*> getLength16beByteString

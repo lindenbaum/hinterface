@@ -19,7 +19,7 @@ mainX :: IOx ()
 mainX = do
     epmdNames "localhost.localdomain" >>= printX
 
-    localNode <- newLocalNode "hay@localhost.localdomain" "cookie"
+    localNode <- newLocalNode "hay@localhost.localdomain" "cookie" -- >>= registerLocalNode
 
     epmdNames "localhost.localdomain" >>= printX
 
@@ -56,6 +56,8 @@ mainX = do
     liftIOx $ putStrLn "BYE"
 
     closeLocalNode localNode
+
+    epmdNames "localhost.localdomain" >>= printX
 
 data Person = Person String Integer
     deriving (Eq, Show)

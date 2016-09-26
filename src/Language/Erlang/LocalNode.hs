@@ -1,8 +1,7 @@
-{-# LANGUAGE RecordWildCards #-}
-
 module Language.Erlang.LocalNode
     ( LocalNode()
     , newLocalNode
+    , registerLocalNode
     , make_pid
     , make_ref
     , make_port
@@ -29,13 +28,12 @@ import           Language.Erlang.Connection
 import           Language.Erlang.Mailbox
 
 --------------------------------------------------------------------------------
-data LocalNode = LocalNode { nodeData  :: NodeData
-                           , dFlags    :: DistributionFlags
-                           , hostName  :: BS.ByteString
-                           , sock      :: BufferedSocket
-                           , creation  :: Word8
-                           , nodeState :: NodeState Term Term Mailbox Connection
-                           , cookie    :: BS.ByteString
+data LocalNode = LocalNode { nodeData     :: NodeData
+                           , dFlags       :: DistributionFlags
+                           , hostName     :: BS.ByteString
+                           , registration :: Maybe NodeRegistration
+                           , nodeState    :: NodeState Term Term Mailbox Connection
+                           , cookie       :: BS.ByteString
                            }
 
 --------------------------------------------------------------------------------
@@ -50,38 +48,40 @@ newLocalNode nodeName cookie = do
                                        , BIT_BINARIES
                                        , NEW_FLOATS
                                        ]
-    NodeRegistration sock creation <- registerNode nodeData hostName
-
     LocalNode <$> pure nodeData
               <*> pure localFlags
               <*> pure hostName
-              <*> pure sock
-              <*> pure (fromIntegral creation)
+              <*> pure Nothing
               <*> newNodeState
               <*> pure cookie
 
+registerLocalNode :: LocalNode -> IOx LocalNode
+registerLocalNode localNode@LocalNode{nodeData,hostName} = do
+    registration <- Just <$> registerNode nodeData hostName
+    return localNode { registration = registration }
+
 getNodeName :: LocalNode -> BS.ByteString
-getNodeName LocalNode{nodeData = NodeData{aliveName = aliveName},hostName = hostName} =
+getNodeName LocalNode{nodeData = NodeData{aliveName},hostName} =
     aliveName `BS.append` "@" `BS.append` hostName
 
 --------------------------------------------------------------------------------
 make_pid :: LocalNode -> IOx Term
-make_pid localNode@LocalNode{creation = creation,nodeState = nodeState} = do
+make_pid localNode@LocalNode{registration,nodeState} = do
     (id, serial) <- new_pid nodeState
-    return $ pid (getNodeName localNode) id serial creation
+    return $ pid (getNodeName localNode) id serial (getCreation registration)
 
 make_ref :: LocalNode -> IOx Term
-make_ref localNode@LocalNode{creation = creation,nodeState = nodeState} = do
+make_ref localNode@LocalNode{registration,nodeState} = do
     (refId0, refId1, refId2) <- new_ref nodeState
-    return $ ref (getNodeName localNode) creation [ refId0, refId1, refId2 ]
+    return $ ref (getNodeName localNode) (getCreation registration) [ refId0, refId1, refId2 ]
 
 make_port :: LocalNode -> IOx Term
-make_port localNode@LocalNode{creation = creation,nodeState = nodeState} = do
+make_port localNode@LocalNode{registration,nodeState} = do
     id <- new_port nodeState
-    return $ port (getNodeName localNode) id creation
+    return $ port (getNodeName localNode) id (getCreation registration)
 
 make_mailbox :: LocalNode -> IOx Mailbox
-make_mailbox localNode@LocalNode{nodeData = nodeData,dFlags = dFlags,nodeState = nodeState,cookie = cookie} = do
+make_mailbox localNode@LocalNode{nodeData,dFlags,nodeState,cookie} = do
     self <- make_pid localNode
     queue <- toIOx newTQueueIO
     let mailbox = newMailbox nodeState self queue make_connection
@@ -91,6 +91,9 @@ make_mailbox localNode@LocalNode{nodeData = nodeData,dFlags = dFlags,nodeState =
     make_connection :: Term -> IOx Connection
     make_connection remoteName = do
         connectNodes (getNodeName localNode) nodeData dFlags remoteName cookie nodeState
+
+getCreation :: (Maybe NodeRegistration) -> Word8
+getCreation = maybe 0 (fromIntegral . nr_creation)
 
 newMailbox :: NodeState Term Term Mailbox Connection -> Term -> TQueue Term -> (Term -> IOx Connection) -> Mailbox
 newMailbox nodeState self queue connect = do
@@ -144,6 +147,6 @@ newMailbox nodeState self queue connect = do
 
 --------------------------------------------------------------------------------
 closeLocalNode :: LocalNode -> IOx ()
-closeLocalNode LocalNode{nodeState = nodeState,sock = sock} = do
-    socketClose sock
-    getConnectedNodes nodeState >>= mapM_ (closeConnection . snd)--------------------------------------------------------------------------------
+closeLocalNode LocalNode{registration,nodeState} = do
+    maybe (return ()) (socketClose . nr_sock) registration
+    getConnectedNodes nodeState >>= mapM_ (closeConnection . snd)

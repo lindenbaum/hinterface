@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-
 module Language.Erlang.Connection
     ( Connection()
     , newConnection
@@ -10,8 +8,6 @@ module Language.Erlang.Connection
 import           Control.Monad
 import           Control.Concurrent
 import           Control.Concurrent.STM
-
-import           Data.Binary
 
 import           Util.BufferedSocket            ( BufferedSocket, socketClose )
 import           Util.Util

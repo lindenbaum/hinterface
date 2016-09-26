@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-
 module Language.Erlang.Term
     ( -- * External Term Format
       Term()
@@ -181,7 +179,8 @@ instance Show Term where
         "#Ref<" ++ unpack node ++ concat (map (\id -> "." ++ show id) ids) ++ ">"
 
 instance Show MapEntry where
-    show MapEntry{..} = show key ++ " => " ++ show value
+    show MapEntry{key,value} =
+        show key ++ " => " ++ show value
 
 showVectorAsList :: Show a => (Vector a) -> String
 showVectorAsList v
@@ -453,7 +452,7 @@ instance Binary Term where
             | otherwise = fail $ "Unsupported tag: " ++ show tag
 
 instance Binary MapEntry where
-    put MapEntry{..} = do
+    put MapEntry{key,value} = do
         put key
         put value
     get = do

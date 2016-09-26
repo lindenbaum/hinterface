@@ -134,7 +134,9 @@ instance Binary RegisterNodeResponse where
                                            creation <- getWord16be
                                            return (Just creation)
 
-data NodeRegistration = NodeRegistration BufferedSocket Word16
+data NodeRegistration = NodeRegistration { nr_sock     :: BufferedSocket
+                                         , nr_creation :: Word16
+                                         }
 
 -- | Register a node
 registerNode :: NodeData -- ^ node
