@@ -1,4 +1,7 @@
-module Util.Socket ( connectSocket ) where
+module Util.Socket
+    ( connectSocket
+    , serverSocket
+    ) where
 
 import           Network.Socket        hiding ( recv, recvFrom, send, sendTo )
 
@@ -14,17 +17,33 @@ connectSocket = (toIOx .) . connectSocket'
 
 connectSocket' :: BS.ByteString -> Word16 -> RawIO Socket
 connectSocket' hostName portNumber = do
-    sock <- socket AF_INET Stream defaultProtocol
+    (sock, sa) <- createSocket hostName (Just portNumber)
     setSocketOption sock NoDelay 1
-    sa <- sockAddr hostName portNumber
     connect sock sa
     return sock
-  where
-    sockAddr :: BS.ByteString -> Word16 -> RawIO SockAddr
-    sockAddr host port = do
-        let hints = defaultHints { addrFlags = [ AI_CANONNAME, AI_NUMERICSERV, AI_ADDRCONFIG ]
-                                 , addrFamily = AF_INET
-                                 , addrSocketType = Stream
-                                 }
-        (ai : _) <- getAddrInfo (Just hints) (Just (CS.unpack host)) (Just (show port))
-        return $ addrAddress ai
+
+serverSocket :: BS.ByteString -> IOx (Socket, Word16)
+serverSocket = toIOx . serverSocket'
+
+serverSocket' :: BS.ByteString -> RawIO (Socket, Word16)
+serverSocket' hostName = do
+    (sock, sa) <- createSocket hostName Nothing
+    bind sock sa
+    listen sock 5
+    port <- socketPort sock
+    return (sock, fromIntegral port)
+
+createSocket :: BS.ByteString -> Maybe Word16 -> RawIO (Socket, SockAddr)
+createSocket hostName portNumber = do
+    ai <- addrInfo hostName portNumber
+    sock <- socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai)
+    return (sock, (addrAddress ai))
+
+addrInfo :: BS.ByteString -> Maybe Word16 -> RawIO AddrInfo
+addrInfo host port = do
+    let hints = defaultHints { addrFlags = [ AI_CANONNAME, AI_NUMERICSERV, AI_ADDRCONFIG ]
+                             , addrFamily = AF_INET
+                             , addrSocketType = Stream
+                             }
+    (ai : _) <- getAddrInfo (Just hints) (Just (CS.unpack host)) (show <$> port)
+    return ai

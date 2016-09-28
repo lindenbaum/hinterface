@@ -200,4 +200,4 @@ handshake sock n cookie = do
     checkCookie :: ChallengeReply -> ChallengeAck -> IOx ()
     checkCookie ChallengeReply{cr_challenge} ChallengeAck{ca_digest} = do
         unless (ca_digest == genDigest cr_challenge cookie) $
-            errorX userErrorType "Cookie mismatch"--------------------------------------------------------------------------------
+            errorX userErrorType "Cookie mismatch"

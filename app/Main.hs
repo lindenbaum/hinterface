@@ -10,7 +10,6 @@ import           Language.Erlang.LocalNode
 import           Language.Erlang.Term
 import           Language.Erlang.Mailbox
 
---------------------------------------------------------------------------------
 main :: IO ()
 main = fromIOx $ do
     mainX
@@ -19,7 +18,7 @@ mainX :: IOx ()
 mainX = do
     epmdNames "localhost.localdomain" >>= printX
 
-    localNode <- newLocalNode "hay@localhost.localdomain" "cookie" -- >>= registerLocalNode
+    localNode <- newLocalNode "hay@localhost.localdomain" "cookie" >>= registerLocalNode
 
     epmdNames "localhost.localdomain" >>= printX
 

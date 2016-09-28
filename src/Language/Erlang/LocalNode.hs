@@ -17,6 +17,7 @@ import qualified Data.ByteString                as BS
 import           Data.Word
 
 import           Util.IOx
+import           Util.Socket
 import           Util.BufferedSocket
 import           Language.Erlang.NodeState
 import           Language.Erlang.NodeData
@@ -48,17 +49,14 @@ newLocalNode nodeName cookie = do
                                        , BIT_BINARIES
                                        , NEW_FLOATS
                                        ]
-    LocalNode <$> pure nodeData
-              <*> pure localFlags
-              <*> pure hostName
-              <*> pure Nothing
-              <*> newNodeState
-              <*> pure cookie
+    LocalNode <$> pure nodeData <*> pure localFlags <*> pure hostName <*> pure Nothing <*> newNodeState <*> pure cookie
 
 registerLocalNode :: LocalNode -> IOx LocalNode
 registerLocalNode localNode@LocalNode{nodeData,hostName} = do
-    registration <- Just <$> registerNode nodeData hostName
-    return localNode { registration = registration }
+    (sock, portNo) <- serverSocket hostName
+    let nodeData' = nodeData { portNo }
+    registration <- Just <$> registerNode nodeData' hostName
+    return localNode { nodeData = nodeData', registration }
 
 getNodeName :: LocalNode -> BS.ByteString
 getNodeName LocalNode{nodeData = NodeData{aliveName},hostName} =
