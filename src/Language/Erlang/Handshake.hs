@@ -1,5 +1,3 @@
-{-# LANGUAGE PackageImports #-}
-
 module Language.Erlang.Handshake
     ( connectNodes
     , Name(..)
@@ -201,3 +199,37 @@ handshake sock n cookie = do
     checkCookie ChallengeReply{cr_challenge} ChallengeAck{ca_digest} = do
         unless (ca_digest == genDigest cr_challenge cookie) $
             errorX userErrorType "Cookie mismatch"
+
+accept :: BufferedSocket -> NodeData -> IOx ()
+accept sock localNode = do
+    Name{n_distVer,n_distFlags,n_nodeName} <- recv
+    send Ok
+    let localFlags = DistributionFlags [ EXTENDED_REFERENCES -- FIXME duplicated from LocalNode
+                                       , FUN_TAGS
+                                       , NEW_FUN_TAGS
+                                       , EXTENDED_PIDS_PORTS
+                                       , BIT_BINARIES
+                                       , NEW_FLOATS
+                                       ]
+    send Challenge { c_distVer = R6B, c_distFlags = localFlags, c_challenge = 0, c_nodeName = "" } -- FIXME 0, ""
+    ChallengeReply{cr_challenge,cr_digest} <- recv
+    return ()
+  where
+    send :: (Binary a) => a -> IOx ()
+    send = runPutSocket2 sock
+
+    recv :: (Binary a) => IOx a
+    recv = runGetSocket2 sock--  checkVersion :: Name -> Challenge -> IOx ()
+                             --  checkVersion Name{n_distVer} Challenge{c_distVer} = do
+                             --      unless (n_distVer == c_distVer) $
+                             --          errorX userErrorType "Version mismatch"
+                             --
+                             --  reply :: Challenge -> IOx ChallengeReply
+                             --  reply Challenge{c_challenge} = do
+                             --      localChallenge <- genChallenge
+                             --      return $ ChallengeReply localChallenge (genDigest c_challenge cookie)
+                             --
+                             --  checkCookie :: ChallengeReply -> ChallengeAck -> IOx ()
+                             --  checkCookie ChallengeReply{cr_challenge} ChallengeAck{ca_digest} = do
+                             --      unless (ca_digest == genDigest cr_challenge cookie) $
+                             --          errorX userErrorType "Cookie mismatch"
