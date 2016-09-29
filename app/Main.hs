@@ -5,6 +5,7 @@ import           Prelude                   hiding ( length )
 import qualified Data.ByteString.Char8     as CS
 
 import           Util.IOx
+
 import           Language.Erlang.Epmd
 import           Language.Erlang.LocalNode
 import           Language.Erlang.Term
@@ -53,6 +54,13 @@ mainX = do
         Nothing -> liftIOx $ putStrLn "NOPE!"
 
     liftIOx $ putStrLn "BYE"
+
+    register localNode "hay" self
+    msg <- receive mailbox
+
+    liftIOx $ putStr "Msg: "
+    liftIOx $ print msg
+    liftIOx $ putStrLn ""
 
     closeLocalNode localNode
 

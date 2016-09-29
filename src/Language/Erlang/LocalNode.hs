@@ -2,6 +2,7 @@ module Language.Erlang.LocalNode
     ( LocalNode()
     , newLocalNode
     , registerLocalNode
+    , register
     , make_pid
     , make_ref
     , make_port
@@ -11,6 +12,7 @@ module Language.Erlang.LocalNode
 
 import           Prelude                        hiding ( id )
 
+import           Control.Concurrent
 import           Control.Concurrent.STM
 
 import qualified Data.ByteString                as BS
@@ -35,6 +37,7 @@ data LocalNode = LocalNode { nodeData     :: NodeData
                            , registration :: Maybe NodeRegistration
                            , nodeState    :: NodeState Term Term Mailbox Connection
                            , cookie       :: BS.ByteString
+                           , acceptor     :: Maybe (Socket, ThreadId)
                            }
 
 --------------------------------------------------------------------------------
@@ -49,14 +52,30 @@ newLocalNode nodeName cookie = do
                                        , BIT_BINARIES
                                        , NEW_FLOATS
                                        ]
-    LocalNode <$> pure nodeData <*> pure localFlags <*> pure hostName <*> pure Nothing <*> newNodeState <*> pure cookie
+    LocalNode <$> pure nodeData
+              <*> pure localFlags
+              <*> pure hostName
+              <*> pure Nothing
+              <*> newNodeState
+              <*> pure cookie
+              <*> pure Nothing
 
 registerLocalNode :: LocalNode -> IOx LocalNode
-registerLocalNode localNode@LocalNode{nodeData,hostName} = do
+registerLocalNode localNode@LocalNode{nodeData,dFlags,hostName,nodeState,cookie} = do
     (sock, portNo) <- serverSocket hostName
     let nodeData' = nodeData { portNo }
+    threadId <- forkIOx (acceptLoop sock nodeData')
     registration <- Just <$> registerNode nodeData' hostName
-    return localNode { nodeData = nodeData', registration }
+    return localNode { nodeData = nodeData', registration, acceptor = Just (sock, threadId) }
+  where
+    acceptLoop sock nodeData' = do
+        _ <- acceptConnection sock (getNodeName localNode) nodeData' dFlags nodeState cookie
+        acceptLoop sock nodeData'
+
+register :: LocalNode -> Term -> Term -> IOx ()
+register LocalNode{nodeState} name pid = do
+    mbox <- getMailboxForPid nodeState pid
+    putMailboxForName nodeState name mbox
 
 getNodeName :: LocalNode -> BS.ByteString
 getNodeName LocalNode{nodeData = NodeData{aliveName},hostName} =
@@ -123,8 +142,8 @@ newMailbox nodeState self queue connect = do
         undefined
 
     _deliverRegSend :: Term -> Term -> IOx ()
-    _deliverRegSend _fromPid _message = do
-        undefined
+    _deliverRegSend _fromPid message = do
+        atomicallyX $ writeTQueue queue message
 
     _deliverGroupLeader :: Term -> IOx ()
     _deliverGroupLeader _fromPid = do
@@ -145,6 +164,11 @@ newMailbox nodeState self queue connect = do
 
 --------------------------------------------------------------------------------
 closeLocalNode :: LocalNode -> IOx ()
-closeLocalNode LocalNode{registration,nodeState} = do
+closeLocalNode LocalNode{registration,nodeState,acceptor} = do
     maybe (return ()) (socketClose . nr_sock) registration
     getConnectedNodes nodeState >>= mapM_ (closeConnection . snd)
+    maybe (return ()) closeAcceptor acceptor
+  where
+    closeAcceptor (sock, threadId) = do
+        killThreadX threadId
+        closeSock sock

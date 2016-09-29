@@ -1,5 +1,6 @@
 module Language.Erlang.Handshake
     ( connectNodes
+    , acceptConnection
     , Name(..)
     , Status(..)
     , Challenge(..)
@@ -158,26 +159,46 @@ connectNodes localName localNode localFlags remoteName cookie nodeState = do
                                 "version mismatch"
                                 (matchDistributionVersion localNode remoteNode)
 
-    Challenge{c_distFlags,c_nodeName} <- handshake sock (Name localVersion localFlags localName) cookie
-    unless (c_nodeName == remoteAlive `BS.append` "@" `BS.append` remoteHost) $
-        errorX userErrorType "Remote node name mismatch"
+    doConnect sock (Name localVersion localFlags localName) (atom_name remoteName) cookie
 
     newConnection sock nodeState remoteName
 
-handshake :: BufferedSocket -> Name -> BS.ByteString -> IOx Challenge
-handshake sock n cookie = do
-    send n
-    s <- recv
-    case s of
+--------------------------------------------------------------------------------
+acceptConnection :: Socket
+                 -> BS.ByteString
+                 -> NodeData
+                 -> DistributionFlags
+                 -> NodeState Term Term Mailbox Connection
+                 -> BS.ByteString
+                 -> IOx Connection
+acceptConnection sock localName localNode localFlags nodeState cookie  = do
+    sock' <- acceptSocket sock >>= makeBuffered
+    remoteName <- doAccept sock' localName localNode localFlags cookie
+    newConnection sock' nodeState remoteName
+
+--------------------------------------------------------------------------------
+doConnect :: BufferedSocket -> Name -> BS.ByteString -> BS.ByteString -> IOx ()
+doConnect sock name@Name{n_distVer = our_distVer} remoteNodeName cookie = do
+    send name
+
+    her_status <- recv
+    case her_status of
         Ok -> return ()
-        _ -> errorX userErrorType $ "Bad status: " ++ show s
-    c <- recv
-    checkVersion n c
-    r <- reply c
-    send r
-    a <- recv
-    checkCookie r a
-    return c
+        _ -> errorX userErrorType $ "Bad status: " ++ show her_status
+
+    Challenge{c_distVer = her_distVer,c_distFlags = her_distFlags,c_challenge = her_challenge,c_nodeName = her_nodeName} <- recv
+    unless (our_distVer == her_distVer) $
+        errorX userErrorType "Version mismatch"
+    unless (remoteNodeName == her_nodeName) $
+        errorX userErrorType "Remote node name mismatch"
+
+    our_challenge <- genChallenge
+    let our_digest = genDigest her_challenge cookie
+    send ChallengeReply { cr_challenge = our_challenge, cr_digest = our_digest }
+
+    ChallengeAck{ca_digest = her_digest} <- recv
+    unless (her_digest == genDigest our_challenge cookie) $
+        errorX userErrorType "Cookie mismatch"
   where
     send :: (Binary a) => a -> IOx ()
     send = runPutSocket2 sock
@@ -185,51 +206,31 @@ handshake sock n cookie = do
     recv :: (Binary a) => IOx a
     recv = runGetSocket2 sock
 
-    checkVersion :: Name -> Challenge -> IOx ()
-    checkVersion Name{n_distVer} Challenge{c_distVer} = do
-        unless (n_distVer == c_distVer) $
-            errorX userErrorType "Version mismatch"
+doAccept :: BufferedSocket -> BS.ByteString -> NodeData -> DistributionFlags -> BS.ByteString -> IOx Term
+doAccept sock localNodeName NodeData{loVer,hiVer} localFlags cookie = do
+    Name{n_distVer = her_distVer,n_distFlags = her_distFlags,n_nodeName = her_nodeName} <- recv
+    unless (loVer <= her_distVer && her_distVer <= hiVer) $
+        errorX userErrorType "Version mismatch"
 
-    reply :: Challenge -> IOx ChallengeReply
-    reply Challenge{c_challenge} = do
-        localChallenge <- genChallenge
-        return $ ChallengeReply localChallenge (genDigest c_challenge cookie)
-
-    checkCookie :: ChallengeReply -> ChallengeAck -> IOx ()
-    checkCookie ChallengeReply{cr_challenge} ChallengeAck{ca_digest} = do
-        unless (ca_digest == genDigest cr_challenge cookie) $
-            errorX userErrorType "Cookie mismatch"
-
-accept :: BufferedSocket -> NodeData -> IOx ()
-accept sock localNode = do
-    Name{n_distVer,n_distFlags,n_nodeName} <- recv
     send Ok
-    let localFlags = DistributionFlags [ EXTENDED_REFERENCES -- FIXME duplicated from LocalNode
-                                       , FUN_TAGS
-                                       , NEW_FUN_TAGS
-                                       , EXTENDED_PIDS_PORTS
-                                       , BIT_BINARIES
-                                       , NEW_FLOATS
-                                       ]
-    send Challenge { c_distVer = R6B, c_distFlags = localFlags, c_challenge = 0, c_nodeName = "" } -- FIXME 0, ""
-    ChallengeReply{cr_challenge,cr_digest} <- recv
-    return ()
+
+    our_challenge <- genChallenge
+    send Challenge { c_distVer = R6B
+                   , c_distFlags = localFlags
+                   , c_challenge = our_challenge
+                   , c_nodeName = localNodeName
+                   }
+
+    ChallengeReply{cr_challenge = her_challenge,cr_digest = her_digest} <- recv
+    unless (her_digest == genDigest our_challenge cookie) $
+        errorX userErrorType "Cookie mismatch"
+
+    let our_digest = genDigest her_challenge cookie
+    send ChallengeAck { ca_digest = our_digest }
+    return (atom her_nodeName)
   where
     send :: (Binary a) => a -> IOx ()
     send = runPutSocket2 sock
 
     recv :: (Binary a) => IOx a
-    recv = runGetSocket2 sock--  checkVersion :: Name -> Challenge -> IOx ()
-                             --  checkVersion Name{n_distVer} Challenge{c_distVer} = do
-                             --      unless (n_distVer == c_distVer) $
-                             --          errorX userErrorType "Version mismatch"
-                             --
-                             --  reply :: Challenge -> IOx ChallengeReply
-                             --  reply Challenge{c_challenge} = do
-                             --      localChallenge <- genChallenge
-                             --      return $ ChallengeReply localChallenge (genDigest c_challenge cookie)
-                             --
-                             --  checkCookie :: ChallengeReply -> ChallengeAck -> IOx ()
-                             --  checkCookie ChallengeReply{cr_challenge} ChallengeAck{ca_digest} = do
-                             --      unless (ca_digest == genDigest cr_challenge cookie) $
-                             --          errorX userErrorType "Cookie mismatch"
+    recv = runGetSocket2 sock

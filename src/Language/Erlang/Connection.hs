@@ -5,7 +5,6 @@ module Language.Erlang.Connection
     , closeConnection
     ) where
 
-import           Control.Monad
 import           Control.Concurrent
 import           Control.Concurrent.STM
 
@@ -27,7 +26,7 @@ data Connection = Connection { sendQueue :: TQueue ControlMessage
 newConnection :: BufferedSocket -> NodeState Term Term Mailbox Connection -> Term -> IOx Connection
 newConnection sock nodeState name = do
     (sendQueue, sendThread) <- (newSender sendLoop) sock
-    recvThread <- (newReceiver recvLoop nodeState) sock
+    recvThread <- (newReceiver recvLoop (sendQueue, nodeState, name)) sock
     let connection = Connection sendQueue (onClose sendThread recvThread)
     putConnectionForNode nodeState name connection
     return connection
@@ -37,9 +36,9 @@ newConnection sock nodeState name = do
         q <- toIOx $ newTQueueIO
         t <- forkIOx (f s q)
         return (q, t)
-    newReceiver :: (s -> r -> IOx ()) -> r -> s -> IOx ThreadId
-    newReceiver f g s = do
-        t <- forkIOx (f s g)
+    newReceiver :: (s -> (TQueue m, r, n) -> IOx ()) -> (TQueue m, r, n) -> s -> IOx ThreadId
+    newReceiver f q s = do
+        t <- forkIOx (f s q)
         return t
     onClose s r = do
         removeConnectionForNode nodeState name
@@ -48,35 +47,33 @@ newConnection sock nodeState name = do
         socketClose sock
 
 sendControlMessage :: Connection -> ControlMessage -> IOx ()
-sendControlMessage Connection{sendQueue = sendQueue} controlMessage = do
+sendControlMessage Connection{sendQueue} controlMessage = do
     atomicallyX $ writeTQueue sendQueue controlMessage
 
 closeConnection :: Connection -> IOx ()
-closeConnection Connection{onClose = onClose} = do
+closeConnection Connection{onClose} = do
     onClose
 
 --------------------------------------------------------------------------------
 sendLoop :: BufferedSocket -> (TQueue ControlMessage) -> IOx ()
 sendLoop sock sendQueue = do
     body `catchX` (logX "sendLoop")
-    when True $ do
-        sendLoop sock sendQueue
-    return ()
+    sendLoop sock sendQueue
   where
     body = do
         controlMessage <- atomicallyX $ readTQueue sendQueue
         runPutSocket2 sock controlMessage
 
-recvLoop :: BufferedSocket -> NodeState Term Term Mailbox Connection -> IOx ()
-recvLoop sock nodeState = do
-    body `catchX` (logX "recvLoop")
-    when True $ do
-        recvLoop sock nodeState
-    return ()
+recvLoop :: BufferedSocket -> (TQueue ControlMessage, NodeState Term Term Mailbox Connection, Term) -> IOx ()
+recvLoop sock (sendQueue, nodeState, name) = do
+    body >> recvLoop sock (sendQueue, nodeState, name) `catchX` (logX "recvLoop") >> getConnectionForNode nodeState name >>=
+        closeConnection
   where
     body = do
         controlMessage <- runGetSocket2 sock
         case controlMessage of
+            TICK -> do
+                atomicallyX $ writeTQueue sendQueue TICK
             LINK fromPid toPid -> do
                 mailbox <- getMailboxForPid nodeState toPid
                 deliverLink mailbox fromPid

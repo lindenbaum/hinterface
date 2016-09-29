@@ -2,13 +2,15 @@ module Language.Erlang.ControlMessage ( ControlMessage(..) ) where
 
 import           Prelude              hiding ( length )
 import           Data.Binary
+import           Data.Binary.Put
 import           Data.Binary.Get
 
 import           Util.Binary
 import           Language.Erlang.Term
 
 --------------------------------------------------------------------------------
-data ControlMessage = LINK Term Term          -- FromPid ToPid
+data ControlMessage = TICK
+                    | LINK Term Term          -- FromPid ToPid
                     | SEND Term Term          -- ToPid Message
                     | EXIT Term Term Term     -- FromPid ToPid Reason
                     | UNLINK Term Term        -- FromPid ToPid
@@ -19,6 +21,7 @@ data ControlMessage = LINK Term Term          -- FromPid ToPid
     deriving (Eq, Show)
 
 instance Binary ControlMessage where
+    put TICK = putWord32be 0
     put controlMessage = putWithLength32be $ do
         putWord8 pass_through
         put' controlMessage
@@ -50,16 +53,19 @@ instance Binary ControlMessage where
             putTerm $ tuple [ exit2Tag, fromPid, toPid, reason ]
     get = do
         expectedLen <- getWord32be
-        pos0 <- bytesRead
-        matchWord8 pass_through
-        controlMessage <- get'
-        pos1 <- bytesRead
-        let actualLen = pos1 - pos0
-        if (fromIntegral expectedLen) == actualLen
-            then do
-                return controlMessage
+        if expectedLen == 0
+            then return TICK
             else do
-                fail "Bad control message length"
+                pos0 <- bytesRead
+                matchWord8 pass_through
+                controlMessage <- get'
+                pos1 <- bytesRead
+                let actualLen = pos1 - pos0
+                if (fromIntegral expectedLen) == actualLen
+                    then do
+                        return controlMessage
+                    else do
+                        fail "Bad control message length"
       where
         get' = do
             term <- getTerm

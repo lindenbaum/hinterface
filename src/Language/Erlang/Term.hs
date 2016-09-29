@@ -29,6 +29,7 @@ module Language.Erlang.Term
     , is_list
     , is_binary
       -- ** Accessors
+    , atom_name
     , length
     , element
     , to_string
@@ -312,6 +313,10 @@ is_binary (Binary _) = True
 is_binary _ = False
 
 --------------------------------------------------------------------------------
+atom_name :: Term -> ByteString
+atom_name (Atom name) = name
+atom_name term = error $ "Bad arg for atom_name: " ++ show term
+
 length :: Term -> Int
 length (Tuple v) = V.length v
 length (String bs) = BS.length bs

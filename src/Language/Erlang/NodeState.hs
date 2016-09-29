@@ -104,8 +104,8 @@ getMailboxForPid NodeState{pid2Mbox} pid = do
 
 --------------------------------------------------------------------------------
 putMailboxForName :: (Ord n) => NodeState p n m c -> n -> m -> IOx ()
-putMailboxForName NodeState{name2Mbox} pid name = do
-    atomicallyX $ modifyTVar' name2Mbox (M.insert pid name)
+putMailboxForName NodeState{name2Mbox} name mbox = do
+    atomicallyX $ modifyTVar' name2Mbox (M.insert name mbox)
 
 getMailboxForName :: (Ord n, Show n) => NodeState p n m c -> n -> IOx m
 getMailboxForName NodeState{name2Mbox} name = do
@@ -114,8 +114,8 @@ getMailboxForName NodeState{name2Mbox} name = do
 
 --------------------------------------------------------------------------------
 putConnectionForNode :: (Ord n) => NodeState p n m c -> n -> c -> IOx ()
-putConnectionForNode NodeState{node2Conn} conn name = do
-    atomicallyX $ modifyTVar' node2Conn (M.insert conn name)
+putConnectionForNode NodeState{node2Conn} name conn = do
+    atomicallyX $ modifyTVar' node2Conn (M.insert name conn)
 
 getConnectionForNode :: (Ord n, Show n) => NodeState p n m c -> n -> IOx c
 getConnectionForNode NodeState{node2Conn} name = do

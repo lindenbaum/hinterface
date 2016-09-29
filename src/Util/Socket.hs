@@ -1,6 +1,9 @@
 module Util.Socket
     ( connectSocket
     , serverSocket
+    , acceptSocket
+    , closeSock
+    , Socket()
     ) where
 
 import           Network.Socket        hiding ( recv, recvFrom, send, sendTo )
@@ -32,6 +35,18 @@ serverSocket' hostName = do
     listen sock 5
     port <- socketPort sock
     return (sock, fromIntegral port)
+
+acceptSocket :: Socket -> IOx Socket
+acceptSocket = toIOx . acceptSocket'
+
+acceptSocket' :: Socket -> RawIO Socket
+acceptSocket' sock = do
+    (sock', sa) <- accept sock
+    setSocketOption sock' NoDelay 1
+    return sock'
+
+closeSock :: Socket -> IOx ()
+closeSock = toIOx . close
 
 createSocket :: BS.ByteString -> Maybe Word16 -> RawIO (Socket, SockAddr)
 createSocket hostName portNumber = do
