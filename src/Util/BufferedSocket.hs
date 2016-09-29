@@ -19,7 +19,7 @@ import qualified Network.Socket.ByteString.Lazy as NBL ( sendAll )
 
 import           Data.IORef                     ( IORef, modifyIORef', newIORef, readIORef, writeIORef )
 
-import           Util.IOx
+import           Data.IOx
 
 --------------------------------------------------------------------------------
 newtype BufferedSocket = BufferedSocket (S.Socket, IORef BS.ByteString)

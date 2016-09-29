@@ -4,7 +4,7 @@ import           Prelude                   hiding ( length )
 
 import qualified Data.ByteString.Char8     as CS
 
-import           Util.IOx
+import           Data.IOx
 
 import           Language.Erlang.Epmd
 import           Language.Erlang.LocalNode

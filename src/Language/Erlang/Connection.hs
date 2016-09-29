@@ -11,7 +11,7 @@ import           Control.Concurrent.STM
 import           Util.BufferedSocket            ( BufferedSocket, socketClose )
 import           Util.Util
 
-import           Util.IOx
+import           Data.IOx
 import           Language.Erlang.NodeState
 import           Language.Erlang.Term
 import           Language.Erlang.ControlMessage
@@ -56,21 +56,25 @@ closeConnection Connection{onClose} = do
 
 --------------------------------------------------------------------------------
 sendLoop :: BufferedSocket -> (TQueue ControlMessage) -> IOx ()
-sendLoop sock sendQueue = do
-    body `catchX` (logX "sendLoop")
-    sendLoop sock sendQueue
+sendLoop sock sendQueue =
+    foreverX (send `catchX` logX "send")
   where
-    body = do
+    send = do
         controlMessage <- atomicallyX $ readTQueue sendQueue
         runPutSocket2 sock controlMessage
 
 recvLoop :: BufferedSocket -> (TQueue ControlMessage, NodeState Term Term Mailbox Connection, Term) -> IOx ()
 recvLoop sock (sendQueue, nodeState, name) = do
-    body >> recvLoop sock (sendQueue, nodeState, name) `catchX` (logX "recvLoop") >> getConnectionForNode nodeState name >>=
-        closeConnection
+    foreverX (recv `catchX`
+                  (\x -> do
+                       logX "recv" x
+                       getConnectionForNode nodeState name >>= closeConnection
+                       throwX x))
   where
-    body = do
+    recv = do
         controlMessage <- runGetSocket2 sock
+        deliver controlMessage `catchX` logX "deliver"
+    deliver controlMessage = do
         case controlMessage of
             TICK -> do
                 atomicallyX $ writeTQueue sendQueue TICK

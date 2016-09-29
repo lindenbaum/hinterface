@@ -1,8 +1,9 @@
-module Util.IOx
+module Data.IOx
     ( RawIO
     , IOx
     , errorX
     , maybeErrorX
+    , throwX
     , catchX
     , toIOx
     , fromIOx
@@ -10,6 +11,7 @@ module Util.IOx
     , forkIOx
     , killThreadX
     , atomicallyX
+    , foreverX
     , printX
     , logX
     , doesNotExistErrorType
@@ -33,11 +35,14 @@ type IOx = EitherT IOError RawIO
 
 errorX :: IOErrorType -> String -> IOx a
 errorX errorType location =
-    left $ mkIOError errorType location Nothing Nothing
+    throwX $ mkIOError errorType location Nothing Nothing
 
 maybeErrorX :: IOErrorType -> String -> Maybe a -> IOx a
 maybeErrorX errorType location =
     maybe (errorX errorType location) (return)
+
+throwX :: IOError -> IOx a
+throwX = left
 
 catchX :: IOx a -> (IOError -> IOx a) -> IOx a
 ma `catchX` handler = mapEitherT (>>= either (runEitherT . handler) (return . Right)) ma
@@ -46,7 +51,7 @@ toIOx :: RawIO a -> IOx a
 toIOx = EitherT . tryIOError . liftIOx
 
 fromIOx :: IOx a -> RawIO a
-fromIOx ma = runEitherT ma >>= either (error . ("ERROR: " ++) . show) (return)
+fromIOx ma = runEitherT ma >>= either (error . ("IOx ERROR: " ++) . show) (return)
 
 liftIOx :: (MonadIO m) => IO a -> m a
 liftIOx = liftIO
@@ -59,6 +64,16 @@ killThreadX = toIOx . killThread
 
 atomicallyX :: STM a -> IOx a
 atomicallyX = toIOx . atomically
+
+-- | @'forever' act@ repeats the action infinitely.
+foreverX :: (Applicative f) => f a -> f b
+{-# INLINE foreverX #-}
+
+-- Use explicit sharing here, as it is prevents a space leak regardless of
+-- optimizations.
+foreverX a = let a' = a *> a'
+             in
+                 a'
 
 printX :: (Show a) => a -> IOx ()
 printX = liftIOx . print

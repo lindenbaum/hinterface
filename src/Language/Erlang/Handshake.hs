@@ -20,7 +20,7 @@ import           Util.BufferedSocket
 import           Util.Binary
 import           Util.Util
 
-import           Util.IOx
+import           Data.IOx
 import           Language.Erlang.Digest
 import           Language.Erlang.NodeState
 import           Language.Erlang.NodeData
@@ -55,9 +55,9 @@ instance Binary Name where
             putByteString n_nodeName
     get = do
         len <- getWord16be
-        (((), version, flags), l) <- getWithLength16be $ (,,) <$> matchChar8 nodeTypeR6 <*> get <*> get
-        name <- getByteString (fromIntegral (len - l))
-        return $ Name version flags name
+        (((), n_distVer, n_distFlags), l) <- getWithLength16be $ (,,) <$> matchChar8 nodeTypeR6 <*> get <*> get
+        n_nodeName <- getByteString (fromIntegral (len - l))
+        return Name { n_distVer, n_distFlags, n_nodeName }
 
 --------------------------------------------------------------------------------
 data Status = Ok | OkSimultaneous | Nok | NotAllowed | Alive
@@ -102,10 +102,13 @@ instance Binary Challenge where
             putByteString c_nodeName
     get = do
         len <- getWord16be
-        (((), version, flags, challenge), l) <- getWithLength16be $
-                                                    (,,,) <$> matchChar8 nodeTypeR6 <*> get <*> get <*> getWord32be
-        name <- getByteString (fromIntegral (len - l))
-        return $ Challenge version flags challenge name
+        (((), c_distVer, c_distFlags, c_challenge), l) <- getWithLength16be $
+                                                              (,,,) <$> matchChar8 nodeTypeR6
+                                                                    <*> get
+                                                                    <*> get
+                                                                    <*> getWord32be
+        c_nodeName <- getByteString (fromIntegral (len - l))
+        return Challenge { c_distVer, c_distFlags, c_challenge, c_nodeName }
 
 --------------------------------------------------------------------------------
 data ChallengeReply = ChallengeReply { cr_challenge :: Word32
@@ -121,9 +124,9 @@ instance Binary ChallengeReply where
             putByteString cr_digest
     get = do
         len <- getWord16be
-        (((), challenge), l) <- getWithLength16be $ (,) <$> matchChar8 challengeReply <*> getWord32be
-        digest <- getByteString (fromIntegral (len - l))
-        return $ ChallengeReply challenge digest
+        (((), cr_challenge), l) <- getWithLength16be $ (,) <$> matchChar8 challengeReply <*> getWord32be
+        cr_digest <- getByteString (fromIntegral (len - l))
+        return ChallengeReply { cr_challenge, cr_digest }
 
 --------------------------------------------------------------------------------
 data ChallengeAck = ChallengeAck { ca_digest :: BS.ByteString }
@@ -137,8 +140,8 @@ instance Binary ChallengeAck where
     get = do
         len <- getWord16be
         ((), l) <- getWithLength16be $ matchChar8 challengeAck
-        digest <- getByteString (fromIntegral (len - l))
-        return $ ChallengeAck digest
+        ca_digest <- getByteString (fromIntegral (len - l))
+        return ChallengeAck { ca_digest }
 
 --------------------------------------------------------------------------------
 connectNodes :: BS.ByteString
@@ -171,7 +174,7 @@ acceptConnection :: Socket
                  -> NodeState Term Term Mailbox Connection
                  -> BS.ByteString
                  -> IOx Connection
-acceptConnection sock localName localNode localFlags nodeState cookie  = do
+acceptConnection sock localName localNode localFlags nodeState cookie = do
     sock' <- acceptSocket sock >>= makeBuffered
     remoteName <- doAccept sock' localName localNode localFlags cookie
     newConnection sock' nodeState remoteName
@@ -187,18 +190,15 @@ doConnect sock name@Name{n_distVer = our_distVer} remoteNodeName cookie = do
         _ -> errorX userErrorType $ "Bad status: " ++ show her_status
 
     Challenge{c_distVer = her_distVer,c_distFlags = her_distFlags,c_challenge = her_challenge,c_nodeName = her_nodeName} <- recv
-    unless (our_distVer == her_distVer) $
-        errorX userErrorType "Version mismatch"
-    unless (remoteNodeName == her_nodeName) $
-        errorX userErrorType "Remote node name mismatch"
+    unless (our_distVer == her_distVer) (errorX userErrorType "Version mismatch")
+    unless (remoteNodeName == her_nodeName) (errorX userErrorType "Remote node name mismatch")
 
     our_challenge <- genChallenge
     let our_digest = genDigest her_challenge cookie
     send ChallengeReply { cr_challenge = our_challenge, cr_digest = our_digest }
 
     ChallengeAck{ca_digest = her_digest} <- recv
-    unless (her_digest == genDigest our_challenge cookie) $
-        errorX userErrorType "Cookie mismatch"
+    unless (her_digest == genDigest our_challenge cookie) (errorX userErrorType "Cookie mismatch")
   where
     send :: (Binary a) => a -> IOx ()
     send = runPutSocket2 sock
@@ -209,8 +209,7 @@ doConnect sock name@Name{n_distVer = our_distVer} remoteNodeName cookie = do
 doAccept :: BufferedSocket -> BS.ByteString -> NodeData -> DistributionFlags -> BS.ByteString -> IOx Term
 doAccept sock localNodeName NodeData{loVer,hiVer} localFlags cookie = do
     Name{n_distVer = her_distVer,n_distFlags = her_distFlags,n_nodeName = her_nodeName} <- recv
-    unless (loVer <= her_distVer && her_distVer <= hiVer) $
-        errorX userErrorType "Version mismatch"
+    unless (loVer <= her_distVer && her_distVer <= hiVer) (errorX userErrorType "Version mismatch")
 
     send Ok
 
@@ -222,8 +221,7 @@ doAccept sock localNodeName NodeData{loVer,hiVer} localFlags cookie = do
                    }
 
     ChallengeReply{cr_challenge = her_challenge,cr_digest = her_digest} <- recv
-    unless (her_digest == genDigest our_challenge cookie) $
-        errorX userErrorType "Cookie mismatch"
+    unless (her_digest == genDigest our_challenge cookie) (errorX userErrorType "Cookie mismatch")
 
     let our_digest = genDigest her_challenge cookie
     send ChallengeAck { ca_digest = our_digest }

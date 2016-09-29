@@ -12,7 +12,7 @@ import           Crypto.Hash           ( MD5(MD5), hashFinalize, hashInitWith, h
 import           System.Random         ( randomIO )
 import           Data.ByteArray        ( convert )
 
-import           Util.IOx
+import           Data.IOx
 
 genChallenge :: IOx Word32
 genChallenge = toIOx $ do

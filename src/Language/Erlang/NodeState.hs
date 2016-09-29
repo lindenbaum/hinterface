@@ -20,7 +20,7 @@ import           Control.Concurrent.STM
 import           Data.Word
 import qualified Data.Map.Strict        as M
 
-import           Util.IOx
+import           Data.IOx
 
 --------------------------------------------------------------------------------
 data NodeState p n m c =

@@ -15,7 +15,7 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Util.IOx
+  exposed-modules:     Data.IOx
                      , Util.Socket
                      , Util.BufferedSocket
                      , Util.Binary
@@ -72,7 +72,7 @@ test-suite hinterface-test
                      , QuickCheck
                      , bytestring
                      , binary
-  other-modules:       Util.IOxSpec
+  other-modules:       Data.IOxSpec
                      , Language.Erlang.NodeDataSpec
                      , Language.Erlang.HandshakeSpec
   default-extensions:  OverloadedStrings

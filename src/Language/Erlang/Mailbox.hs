@@ -1,6 +1,6 @@
 module Language.Erlang.Mailbox ( Mailbox(..) ) where
 
-import           Util.IOx
+import           Data.IOx
 import           Language.Erlang.Term
 
 data Mailbox = Mailbox { getPid             :: Term

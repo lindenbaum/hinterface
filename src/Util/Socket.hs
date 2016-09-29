@@ -12,7 +12,7 @@ import qualified Data.ByteString       as BS
 import qualified Data.ByteString.Char8 as CS
 import           Data.Word
 
-import           Util.IOx
+import           Data.IOx
 
 --------------------------------------------------------------------------------
 connectSocket :: BS.ByteString -> Word16 -> IOx Socket

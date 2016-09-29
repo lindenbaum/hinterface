@@ -16,7 +16,7 @@ import           Data.Binary.Put
 import           Data.Binary.Get
 import           Data.Maybe
 
-import           Util.IOx
+import           Data.IOx
 import           Util.BufferedSocket
 import           Util.Binary
 import           Util.Socket
