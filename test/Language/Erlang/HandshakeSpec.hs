@@ -26,7 +26,7 @@ spec = do
                 return $ (decode . encode) a `shouldBe` a
         it "encodes as expected" $
             encode (Name R6B (DistributionFlags []) "name") `shouldBe`
-                (LBS.pack [ 0, 11, fromIntegral $ ord 'n', 0, 5, 0, 0, 0, 0 ] `LBS.append` "name")
+                withLength16 (LBS.pack [ fromIntegral $ ord 'n', 0, 5, 0, 0, 0, 0 ] `LBS.append` "name")
 
     describe "Status" $ do
         it "decode . encode = id" $
@@ -34,15 +34,16 @@ spec = do
                 a <- arbitraryBoundedEnum :: Gen Status
                 return $ (decode . encode) a `shouldBe` a
         it "Ok encodes to \"ok\"" $
-            encode Ok `shouldBe` (LBS.pack [ 0, 3, fromIntegral $ ord 's' ] `LBS.append` "ok")
+            encode Ok `shouldBe` withLength16 (LBS.pack [ fromIntegral $ ord 's' ] `LBS.append` "ok")
         it "OkSimlutaneous encodes to \"ok_simultaneous\"" $
-            encode OkSimultaneous `shouldBe` (LBS.pack [ 0, 16, fromIntegral $ ord 's' ] `LBS.append` "ok_simultaneous")
+            encode OkSimultaneous `shouldBe`
+                withLength16 (LBS.pack [ fromIntegral $ ord 's' ] `LBS.append` "ok_simultaneous")
         it "Nok encodes to \"nok\"" $
-            encode Nok `shouldBe` (LBS.pack [ 0, 4, fromIntegral $ ord 's' ] `LBS.append` "nok")
+            encode Nok `shouldBe` withLength16 (LBS.pack [ fromIntegral $ ord 's' ] `LBS.append` "nok")
         it "NotAllowed encodes to \"not_allowed\"" $
             encode NotAllowed `shouldBe` (LBS.pack [ 0, 12, fromIntegral $ ord 's' ] `LBS.append` "not_allowed")
         it "Alive encodes to \"alive\"" $
-            encode Alive `shouldBe` (LBS.pack [ 0, 6, fromIntegral $ ord 's' ] `LBS.append` "alive")
+            encode Alive `shouldBe` withLength16 (LBS.pack [ fromIntegral $ ord 's' ] `LBS.append` "alive")
 
     describe "Challenge" $ do
         it "decode . encode = id" $
@@ -69,5 +70,5 @@ spec = do
                 let a = ChallengeAck d
                 return $ (decode . encode) a `shouldBe` a
 
-withLength :: [Word8] -> LBS.ByteString
-withLength bytes = LBS.pack [ 0, 0, 0, 0 ] `LBS.append` LBS.pack bytes
+withLength16 :: LBS.ByteString -> LBS.ByteString
+withLength16 bytes = encode (fromIntegral (LBS.length bytes) :: Word16) `LBS.append` bytes

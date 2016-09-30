@@ -1,3 +1,5 @@
+{-# LANGUAGE Rank2Types #-}
+
 module Language.Erlang.Handshake
     ( connectNodes
     , acceptConnection
@@ -162,7 +164,7 @@ connectNodes localName localNode localFlags remoteName cookie nodeState = do
                                 "version mismatch"
                                 (matchDistributionVersion localNode remoteNode)
 
-    doConnect sock (Name localVersion localFlags localName) (atom_name remoteName) cookie
+    doConnect (runPutSocket2 sock) (runGetSocket2 sock) (Name localVersion localFlags localName) cookie
 
     newConnection sock nodeState remoteName
 
@@ -176,12 +178,12 @@ acceptConnection :: Socket
                  -> IOx Connection
 acceptConnection sock localName localNode localFlags nodeState cookie = do
     sock' <- acceptSocket sock >>= makeBuffered
-    remoteName <- doAccept sock' localName localNode localFlags cookie
+    remoteName <- doAccept (runPutSocket2 sock') (runGetSocket2 sock') localName localNode localFlags cookie
     newConnection sock' nodeState remoteName
 
 --------------------------------------------------------------------------------
-doConnect :: BufferedSocket -> Name -> BS.ByteString -> BS.ByteString -> IOx ()
-doConnect sock name@Name{n_distVer = our_distVer} remoteNodeName cookie = do
+doConnect :: (forall o. Binary o => o -> IOx ()) -> (forall i. (Binary i) => IOx i) -> Name -> BS.ByteString -> IOx ()
+doConnect send recv name@Name{n_distVer = our_distVer} cookie = do
     send name
 
     her_status <- recv
@@ -191,23 +193,23 @@ doConnect sock name@Name{n_distVer = our_distVer} remoteNodeName cookie = do
 
     Challenge{c_distVer = her_distVer,c_distFlags = her_distFlags,c_challenge = her_challenge,c_nodeName = her_nodeName} <- recv
     unless (our_distVer == her_distVer) (errorX userErrorType "Version mismatch")
-    unless (remoteNodeName == her_nodeName) (errorX userErrorType "Remote node name mismatch")
 
     our_challenge <- genChallenge
     let our_digest = genDigest her_challenge cookie
     send ChallengeReply { cr_challenge = our_challenge, cr_digest = our_digest }
 
     ChallengeAck{ca_digest = her_digest} <- recv
-    unless (her_digest == genDigest our_challenge cookie) (errorX userErrorType "Cookie mismatch")
-  where
-    send :: (Binary a) => a -> IOx ()
-    send = runPutSocket2 sock
+    checkCookie her_digest our_challenge cookie
 
-    recv :: (Binary a) => IOx a
-    recv = runGetSocket2 sock
-
-doAccept :: BufferedSocket -> BS.ByteString -> NodeData -> DistributionFlags -> BS.ByteString -> IOx Term
-doAccept sock localNodeName NodeData{loVer,hiVer} localFlags cookie = do
+--------------------------------------------------------------------------------
+doAccept :: (forall o. Binary o => o -> IOx ())
+         -> (forall i. (Binary i) => IOx i)
+         -> BS.ByteString
+         -> NodeData
+         -> DistributionFlags
+         -> BS.ByteString
+         -> IOx Term
+doAccept send recv localNodeName NodeData{loVer,hiVer} localFlags cookie = do
     Name{n_distVer = her_distVer,n_distFlags = her_distFlags,n_nodeName = her_nodeName} <- recv
     unless (loVer <= her_distVer && her_distVer <= hiVer) (errorX userErrorType "Version mismatch")
 
@@ -221,14 +223,12 @@ doAccept sock localNodeName NodeData{loVer,hiVer} localFlags cookie = do
                    }
 
     ChallengeReply{cr_challenge = her_challenge,cr_digest = her_digest} <- recv
-    unless (her_digest == genDigest our_challenge cookie) (errorX userErrorType "Cookie mismatch")
+    checkCookie her_digest our_challenge cookie
 
     let our_digest = genDigest her_challenge cookie
     send ChallengeAck { ca_digest = our_digest }
     return (atom her_nodeName)
-  where
-    send :: (Binary a) => a -> IOx ()
-    send = runPutSocket2 sock
 
-    recv :: (Binary a) => IOx a
-    recv = runGetSocket2 sock
+checkCookie :: BS.ByteString -> Word32 -> BS.ByteString -> IOx ()
+checkCookie her_digest our_challenge cookie =
+    unless (her_digest == genDigest our_challenge cookie) (errorX userErrorType "Cookie mismatch")

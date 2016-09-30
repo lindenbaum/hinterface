@@ -86,6 +86,6 @@ spec = do
             encode (DistributionFlags [ UTF8_ATOMS ]) `shouldBe` encode (0x10000 :: Word32)
         it "[minBound .. maxBound] encodes to 0x17FFF" $
             encode (DistributionFlags [minBound .. maxBound]) `shouldBe` encode (0x17FFF :: Word32)
-        it "0xFFFFFFFF decoddes to [minBound .. maxBound]" $
+        it "0xFFFFFFFF decodes to [minBound .. maxBound]" $
             (decode . encode) (0xFFFFFFFF :: Word32) `shouldBe`
                 DistributionFlags [minBound .. maxBound]

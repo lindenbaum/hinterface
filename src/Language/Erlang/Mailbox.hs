@@ -11,6 +11,7 @@ data Mailbox = Mailbox { getPid             :: Term
                        , deliverRegSend     :: Term -> Term -> IOx ()
                        , deliverGroupLeader :: Term -> IOx ()
                        , deliverExit2       :: Term -> Term -> IOx ()
+                       , send               :: Term -> Term -> IOx ()
                        , sendReg            :: Term -> Term -> Term -> IOx ()
                        , receive            :: IOx Term
                        }

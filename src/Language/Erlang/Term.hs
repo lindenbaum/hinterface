@@ -29,11 +29,13 @@ module Language.Erlang.Term
     , is_list
     , is_binary
       -- ** Accessors
+    , node
     , atom_name
     , length
     , element
     , to_string
     , to_integer
+      -- ** Matchers
     , match_atom
     , match_tuple
       -- ** Utilities
@@ -163,12 +165,12 @@ instance Show Term where
     show (Integer i) = show i
     show (Float d) = show d
     show (Atom a) = unpack a
-    show (Reference node id _creation) =
-        "#Ref<" ++ unpack node ++ "." ++ show id ++ ">"
-    show (Port node id _creation) =
-        "#Port<" ++ unpack node ++ "." ++ show id ++ ">"
-    show (Pid node id serial _creation) =
-        "#Pid<" ++ unpack node ++ "." ++ show id ++ "." ++ show serial ++ ">"
+    show (Reference nodeName id _creation) =
+        "#Ref<" ++ unpack nodeName ++ "." ++ show id ++ ">"
+    show (Port nodeName id _creation) =
+        "#Port<" ++ unpack nodeName ++ "." ++ show id ++ ">"
+    show (Pid nodeName id serial _creation) =
+        "#Pid<" ++ unpack nodeName ++ "." ++ show id ++ "." ++ show serial ++ ">"
     show (Tuple v) = "{" ++ showVectorAsList v ++ "}"
     show (Map e) = "#{" ++ showVectorAsList e ++ "}"
     show Nil = "[]"
@@ -176,8 +178,8 @@ instance Show Term where
     show (List v Nil) = "[" ++ showVectorAsList v ++ "]"
     show (List v t) = "[" ++ showVectorAsList v ++ "|" ++ show t ++ "]"
     show (Binary b) = "<<" ++ showByteStringAsIntList b ++ ">>"
-    show (NewReference node _creation ids) =
-        "#Ref<" ++ unpack node ++ concat (map (\id -> "." ++ show id) ids) ++ ">"
+    show (NewReference nodeName _creation ids) =
+        "#Ref<" ++ unpack nodeName ++ concat (map (\id -> "." ++ show id) ids) ++ ">"
 
 instance Show MapEntry where
     show MapEntry{key,value} =
@@ -313,6 +315,17 @@ is_binary (Binary _) = True
 is_binary _ = False
 
 --------------------------------------------------------------------------------
+node :: Term -> Term
+node (Reference nodeName _id _creation) =
+    atom nodeName
+node (Port nodeName _id _creation) =
+    atom nodeName
+node (Pid nodeName _id _serial _creation) =
+    atom nodeName
+node (NewReference nodeName _creation _ids) =
+    atom nodeName
+node term = error $ "Bad arg for node: " ++ show term
+
 atom_name :: Term -> ByteString
 atom_name (Atom name) = name
 atom_name term = error $ "Bad arg for atom_name: " ++ show term
@@ -374,21 +387,21 @@ instance Binary Term where
     put (Atom n) = do
         putAtom n
 
-    put (Reference node id creation) = do
+    put (Reference nodeName id creation) = do
         putWord8 reference_ext
-        putAtom node
+        putAtom nodeName
         putWord32be id
         putWord8 creation
 
-    put (Port node id creation) = do
+    put (Port nodeName id creation) = do
         putWord8 port_ext
-        putAtom node
+        putAtom nodeName
         putWord32be id
         putWord8 creation
 
-    put (Pid node id serial creation) = do
+    put (Pid nodeName id serial creation) = do
         putWord8 pid_ext
-        putAtom node
+        putAtom nodeName
         putWord32be id
         putWord32be serial
         putWord8 creation
@@ -438,6 +451,8 @@ instance Binary Term where
         get' tag
             | tag == small_integer_ext =
                   getSmallInteger (Integer . fromIntegral)
+            | tag == integer_ext =
+                  getInteger (Integer . fromIntegral)
             | tag == atom_ext = getAtom Atom
             | tag == port_ext = getPort Port
             | tag == pid_ext = getPid Pid
@@ -484,6 +499,11 @@ getSmallInteger :: (Word8 -> a) -> Get a
 getSmallInteger f = do
     matchWord8 small_integer_ext
     f <$> getWord8
+
+getInteger :: (Word32 -> a) -> Get a
+getInteger f = do
+    matchWord8 integer_ext
+    f <$> getWord32be
 
 getAtom :: (ByteString -> a) -> Get a
 getAtom f = do

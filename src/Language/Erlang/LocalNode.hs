@@ -121,6 +121,10 @@ newMailbox nodeState self queue connect =
                 undefined
             , deliverExit2 = \_fromPid _reason -> do
                 undefined
+            , send = \toPid message -> do
+                let nodeName = node toPid
+                connection <- getConnectionForNode nodeState nodeName `catchX` const (connect nodeName)
+                sendControlMessage connection $ SEND toPid message
             , sendReg = \regName nodeName message -> do
                 connection <- getConnectionForNode nodeState nodeName `catchX` const (connect nodeName)
                 sendControlMessage connection $ REG_SEND self regName message

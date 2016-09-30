@@ -1,8 +1,9 @@
+-- M-x intero-targets
+-- hinterface:lib hinterface:hinterface-test
+--
 module Main ( main ) where
 
 import           Prelude                   hiding ( length )
-
-import qualified Data.ByteString.Char8     as CS
 
 import           Data.IOx
 
@@ -10,6 +11,8 @@ import           Language.Erlang.Epmd
 import           Language.Erlang.LocalNode
 import           Language.Erlang.Term
 import           Language.Erlang.Mailbox
+
+import           Person
 
 main :: IO ()
 main = fromIOx $ do
@@ -56,25 +59,22 @@ mainX = do
     liftIOx $ putStrLn "BYE"
 
     register localNode "hay" self
-    msg <- receive mailbox
-
-    liftIOx $ putStr "Msg: "
-    liftIOx $ print msg
-    liftIOx $ putStrLn ""
+    loopX mailbox
 
     closeLocalNode localNode
 
     epmdNames "localhost.localdomain" >>= printX
 
-data Person = Person String Integer
-    deriving (Eq, Show)
-
-instance ToTerm Person where
-    toTerm (Person name age) =
-        tuple [ (atom "person"), string (CS.pack name), integer (fromIntegral age) ]
-
-instance FromTerm Person where
-    fromTerm term = case match_tuple term of
-        Just [ tag, name, age ] ->
-            match_atom tag "person" >> Person <$> (CS.unpack <$> to_string name) <*> (to_integer age)
-        _ -> Nothing
+loopX :: Mailbox -> IOx ()
+loopX mailbox = do
+    msg <- receive mailbox
+    case match_tuple msg of
+        Just [ remotePid, value ] -> do
+            case to_integer value of
+                Just i -> do
+                    send mailbox remotePid (integer (i + 1))
+                    loopX mailbox
+                _ -> do
+                    return ()
+        _ -> do
+            return ()
