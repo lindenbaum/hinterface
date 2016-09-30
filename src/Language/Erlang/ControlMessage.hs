@@ -30,7 +30,7 @@ instance Binary ControlMessage where
             putTerm $ tuple [ linkTag, fromPid, toPid ]
 
         put' (SEND toPid message) = do
-            putTerm $ tuple [ sendTag,  unused, toPid ]
+            putTerm $ tuple [ sendTag, unused, toPid ]
             putTerm message
 
         put' (EXIT fromPid toPid reason) = do
