@@ -5,6 +5,8 @@ module Language.Erlang.Connection
     , closeConnection
     ) where
 
+import           Control.Monad
+import           Control.Monad.IO.Class
 import           Control.Concurrent
 import           Control.Concurrent.STM
 
@@ -48,7 +50,7 @@ newConnection sock nodeState name = do
 
 sendControlMessage :: Connection -> ControlMessage -> IOx ()
 sendControlMessage Connection{sendQueue} controlMessage = do
-    atomicallyX $ writeTQueue sendQueue controlMessage
+    liftIO $ atomically $ writeTQueue sendQueue controlMessage
 
 closeConnection :: Connection -> IOx ()
 closeConnection Connection{onClose} = do
@@ -57,19 +59,19 @@ closeConnection Connection{onClose} = do
 --------------------------------------------------------------------------------
 sendLoop :: BufferedSocket -> (TQueue ControlMessage) -> IOx ()
 sendLoop sock sendQueue =
-    foreverX (send `catchX` logX "send")
+    forever (send `catchX` logX "send")
   where
     send = do
-        controlMessage <- atomicallyX $ readTQueue sendQueue
+        controlMessage <- liftIO $ atomically $ readTQueue sendQueue
         runPutSocket2 sock controlMessage
 
 recvLoop :: BufferedSocket -> (TQueue ControlMessage, NodeState Term Term Mailbox Connection, Term) -> IOx ()
 recvLoop sock (sendQueue, nodeState, name) = do
-    foreverX (recv `catchX`
-                  (\x -> do
-                       logX "recv" x
-                       getConnectionForNode nodeState name >>= closeConnection
-                       throwX x))
+    forever (recv `catchX`
+                 (\x -> do
+                      logX "recv" x
+                      getConnectionForNode nodeState name >>= closeConnection
+                      throwX x))
   where
     recv = do
         controlMessage <- runGetSocket2 sock
@@ -77,7 +79,7 @@ recvLoop sock (sendQueue, nodeState, name) = do
     deliver controlMessage = do
         case controlMessage of
             TICK -> do
-                atomicallyX $ writeTQueue sendQueue TICK
+                liftIO $ atomically $ writeTQueue sendQueue TICK
             LINK fromPid toPid -> do
                 mailbox <- getMailboxForPid nodeState toPid
                 deliverLink mailbox fromPid

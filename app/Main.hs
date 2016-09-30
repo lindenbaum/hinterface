@@ -5,6 +5,8 @@ module Main ( main ) where
 
 import           Prelude                   hiding ( length )
 
+import           Control.Monad.IO.Class    ( liftIO )
+
 import           Data.IOx
 
 import           Language.Erlang.Epmd
@@ -20,11 +22,11 @@ main = fromIOx $ do
 
 mainX :: IOx ()
 mainX = do
-    epmdNames "localhost.localdomain" >>= printX
+    epmdNames "localhost.localdomain" >>= (liftIO . print)
 
     localNode <- newLocalNode "hay@localhost.localdomain" "cookie" >>= registerLocalNode
 
-    epmdNames "localhost.localdomain" >>= printX
+    epmdNames "localhost.localdomain" >>= (liftIO . print)
 
     mailbox <- make_mailbox localNode
     let self = getPid mailbox
@@ -37,33 +39,33 @@ mainX = do
                         , tuple [ float 2.18, tuple [], list [], list [ atom "a", atom "b", atom "c" ] ]
                         , string "hello!"
                         ]
-    liftIOx $ putStr "Message: "
-    liftIOx $ print message
-    liftIOx $ putStrLn ""
+    liftIO $ putStr "Message: "
+    liftIO $ print message
+    liftIO $ putStrLn ""
 
     sendReg mailbox "echo" "erl@localhost.localdomain" message
 
 
     reply <- receive mailbox
-    liftIOx $ putStr "Reply: "
-    liftIOx $ print reply
-    liftIOx $ putStrLn ""
+    liftIO $ putStr "Reply: "
+    liftIO $ print reply
+    liftIO $ putStrLn ""
 
     sendReg mailbox "echo" "erl@localhost.localdomain" (tuple [ self, (toTerm (Person "Timo" 46)) ])
     person <- receive mailbox
-    liftIOx $ print person
+    liftIO $ print person
     case fromTerm person :: Maybe Person of
-        Just p -> liftIOx $ print p
-        Nothing -> liftIOx $ putStrLn "NOPE!"
+        Just p -> liftIO $ print p
+        Nothing -> liftIO $ putStrLn "NOPE!"
 
-    liftIOx $ putStrLn "BYE"
+    liftIO $ putStrLn "BYE"
 
     register localNode "hay" self
     loopX mailbox
 
     closeLocalNode localNode
 
-    epmdNames "localhost.localdomain" >>= printX
+    epmdNames "localhost.localdomain" >>= (liftIO . print)
 
 loopX :: Mailbox -> IOx ()
 loopX mailbox = do

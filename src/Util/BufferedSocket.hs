@@ -9,6 +9,7 @@ module Util.BufferedSocket
     ) where
 
 import           Control.Monad                  ( unless )
+import           Control.Monad.IO.Class         ( liftIO )
 
 import qualified Data.ByteString                as BS ( ByteString, append, empty, length, null, splitAt )
 import qualified Data.ByteString.Lazy           as BL ( ByteString )
@@ -26,7 +27,7 @@ newtype BufferedSocket = BufferedSocket (S.Socket, IORef BS.ByteString)
 
 makeBuffered :: S.Socket -> IOx BufferedSocket
 makeBuffered sock = do
-    bufIO <- liftIOx $ newIORef BS.empty
+    bufIO <- liftIO $ newIORef BS.empty
     return $ BufferedSocket (sock, bufIO)
 
 socketPort :: BufferedSocket -> IOx S.PortNumber

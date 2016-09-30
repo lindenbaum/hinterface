@@ -15,6 +15,7 @@ module Language.Erlang.NodeState
     ) where
 
 import           Control.Monad          ( when )
+import           Control.Monad.IO.Class
 import           Control.Concurrent.STM
 
 import           Data.Word
@@ -62,73 +63,78 @@ newNodeState = toIOx $ do
 --------------------------------------------------------------------------------
 new_pid :: NodeState p n m c -> IOx (Word32, Word32)
 new_pid NodeState{serial,pidId} =
-    atomicallyX $ do
-        let p = (,) <$> readTVar pidId <*> readTVar serial
+    liftIO $
+        atomically $ do
+            let p = (,) <$> readTVar pidId <*> readTVar serial
 
-        whenM (inc pidId _15bits) $
-            voidM (inc serial _13bits)
+            whenM (inc pidId _15bits) $
+                voidM (inc serial _13bits)
 
-        p
+            p
 
 --------------------------------------------------------------------------------
 new_port :: NodeState p n m c -> IOx Word32
 new_port NodeState{portId} =
-    atomicallyX $ do
-        let p = readTVar portId
+    liftIO $
+        atomically $ do
+            let p = readTVar portId
 
-        voidM (inc portId _28bits)
+            voidM (inc portId _28bits)
 
-        p
+            p
 
 --------------------------------------------------------------------------------
 new_ref :: NodeState p n m c -> IOx (Word32, Word32, Word32)
 new_ref NodeState{refId0,refId1,refId2} =
-    atomicallyX $ do
-        let r = (,,) <$> readTVar refId0 <*> readTVar refId1 <*> readTVar refId2
+    liftIO $
+        atomically $ do
+            let r = (,,) <$> readTVar refId0 <*> readTVar refId1 <*> readTVar refId2
 
-        whenM (inc refId0 _18bits) $
-            whenM (inc refId1 _32bits) $
-                voidM (inc refId2 _32bits)
+            whenM (inc refId0 _18bits) $
+                whenM (inc refId1 _32bits) $
+                    voidM (inc refId2 _32bits)
 
-        r
+            r
 
 --------------------------------------------------------------------------------
 putMailboxForPid :: (Ord p) => NodeState p n m c -> p -> m -> IOx ()
-putMailboxForPid NodeState{pid2Mbox} pid mbox = do
-    atomicallyX $ modifyTVar' pid2Mbox (M.insert pid mbox)
+putMailboxForPid NodeState{pid2Mbox} pid mbox =
+    liftIO $
+        atomically $ do
+            modifyTVar' pid2Mbox (M.insert pid mbox)
 
 getMailboxForPid :: (Ord p, Show p) => NodeState p n m c -> p -> IOx m
 getMailboxForPid NodeState{pid2Mbox} pid = do
-    m <- atomicallyX $ readTVar pid2Mbox
+    m <- liftIO $ atomically $ readTVar pid2Mbox
     maybeErrorX doesNotExistErrorType (show pid) (M.lookup pid m)
 
 --------------------------------------------------------------------------------
 putMailboxForName :: (Ord n) => NodeState p n m c -> n -> m -> IOx ()
 putMailboxForName NodeState{name2Mbox} name mbox = do
-    atomicallyX $ modifyTVar' name2Mbox (M.insert name mbox)
+    liftIO $ atomically $ modifyTVar' name2Mbox (M.insert name mbox)
 
 getMailboxForName :: (Ord n, Show n) => NodeState p n m c -> n -> IOx m
 getMailboxForName NodeState{name2Mbox} name = do
-    m <- atomicallyX $ readTVar name2Mbox
+    m <- liftIO $ atomically $ readTVar name2Mbox
     maybeErrorX doesNotExistErrorType (show name) (M.lookup name m)
 
 --------------------------------------------------------------------------------
 putConnectionForNode :: (Ord n) => NodeState p n m c -> n -> c -> IOx ()
 putConnectionForNode NodeState{node2Conn} name conn = do
-    atomicallyX $ modifyTVar' node2Conn (M.insert name conn)
+    liftIO $ atomically $ modifyTVar' node2Conn (M.insert name conn)
 
 getConnectionForNode :: (Ord n, Show n) => NodeState p n m c -> n -> IOx c
 getConnectionForNode NodeState{node2Conn} name = do
-    m <- atomicallyX $ readTVar node2Conn
+    m <- liftIO $ atomically $ readTVar node2Conn
     maybeErrorX doesNotExistErrorType (show name) (M.lookup name m)
 
 removeConnectionForNode :: (Ord n) => NodeState p n m c -> n -> IOx ()
 removeConnectionForNode NodeState{node2Conn} name = do
-    atomicallyX $ modifyTVar' node2Conn (M.delete name)
+    liftIO $ atomically $ modifyTVar' node2Conn (M.delete name)
 
 getConnectedNodes :: NodeState p n m c -> IOx [(n, c)]
 getConnectedNodes NodeState{node2Conn} = do
-    m <- atomicallyX $ readTVar node2Conn
+    m <- liftIO $ atomically $ readTVar node2Conn
     return $ M.toList m
 
 --------------------------------------------------------------------------------

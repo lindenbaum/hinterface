@@ -13,6 +13,7 @@ module Language.Erlang.LocalNode
 import           Prelude                        hiding ( id )
 
 import           Control.Monad
+import           Control.Monad.IO.Class
 import           Control.Concurrent
 import           Control.Concurrent.STM
 
@@ -22,6 +23,8 @@ import           Data.Word
 import           Data.IOx
 import           Util.Socket
 import           Util.BufferedSocket
+import           Util.Util
+
 import           Language.Erlang.NodeState
 import           Language.Erlang.NodeData
 import           Language.Erlang.Epmd
@@ -31,13 +34,10 @@ import           Language.Erlang.ControlMessage
 import           Language.Erlang.Connection
 import           Language.Erlang.Mailbox
 
-data LocalNode = LocalNode { nodeData     :: NodeData
-                           , dFlags       :: DistributionFlags
-                           , hostName     :: BS.ByteString
-                           , registration :: Maybe NodeRegistration
-                           , nodeState    :: NodeState Term Term Mailbox Connection
-                           , cookie       :: BS.ByteString
-                           , acceptor     :: Maybe (Socket, ThreadId)
+data LocalNode = LocalNode { handshakeNode :: HandshakeNode
+                           , registration  :: Maybe NodeRegistration
+                           , nodeState     :: NodeState Term Term Mailbox Connection
+                           , acceptor      :: Maybe (Socket, ThreadId)
                            }
 
 newLocalNode :: Term -> BS.ByteString -> IOx LocalNode
@@ -51,46 +51,53 @@ newLocalNode nodeName cookie = do
                                    , BIT_BINARIES
                                    , NEW_FLOATS
                                    ]
+        handshakeNode = HandshakeNode { hostName, dFlags, nodeData, cookie }
     nodeState <- newNodeState
-    return LocalNode { nodeData, dFlags, hostName, registration = Nothing, nodeState, cookie, acceptor = Nothing }
+    return LocalNode { handshakeNode, registration = Nothing, nodeState, acceptor = Nothing }
 
 registerLocalNode :: LocalNode -> IOx LocalNode
-registerLocalNode localNode@LocalNode{nodeData,dFlags,hostName,nodeState,cookie} = do
+registerLocalNode localNode@LocalNode{handshakeNode = hsn@HandshakeNode{hostName,nodeData},nodeState} = do
     (sock, portNo) <- serverSocket hostName
     let nodeData' = nodeData { portNo }
-    threadId <- forkIOx (foreverX (acceptLoop sock nodeData'))
+        handshakeNode' = hsn { nodeData = nodeData' }
+    threadId <- forkIOx (acceptLoop sock handshakeNode')
     registration <- Just <$> registerNode nodeData' hostName
-    return localNode { nodeData = nodeData', registration, acceptor = Just (sock, threadId) }
+    return localNode { handshakeNode = handshakeNode', registration, acceptor = Just (sock, threadId) }
   where
-    acceptLoop sock nodeData' =
-        void $ acceptConnection sock (getNodeName localNode) nodeData' dFlags nodeState cookie
+    acceptLoop sock handshakeNode' =
+        forever accept
+      where
+        accept = do
+            sock' <- acceptSocket sock >>= makeBuffered
+            remoteName <- doAccept (runPutSocket2 sock') (runGetSocket2 sock') handshakeNode'
+            newConnection sock' nodeState (atom remoteName)
 
 register :: LocalNode -> Term -> Term -> IOx ()
 register LocalNode{nodeState} name pid' = do
     mbox <- getMailboxForPid nodeState pid'
     putMailboxForName nodeState name mbox
 
-getNodeName :: LocalNode -> BS.ByteString
-getNodeName LocalNode{nodeData = NodeData{aliveName},hostName} =
-    aliveName `BS.append` "@" `BS.append` hostName
+getNodeName' :: LocalNode -> BS.ByteString
+getNodeName' LocalNode{handshakeNode} =
+    getNodeName handshakeNode
 
 make_pid :: LocalNode -> IOx Term
 make_pid localNode@LocalNode{registration,nodeState} = do
     (id, serial) <- new_pid nodeState
-    return $ pid (getNodeName localNode) id serial (getCreation registration)
+    return $ pid (getNodeName' localNode) id serial (getCreation registration)
 
 make_ref :: LocalNode -> IOx Term
 make_ref localNode@LocalNode{registration,nodeState} = do
     (refId0, refId1, refId2) <- new_ref nodeState
-    return $ ref (getNodeName localNode) (getCreation registration) [ refId0, refId1, refId2 ]
+    return $ ref (getNodeName' localNode) (getCreation registration) [ refId0, refId1, refId2 ]
 
 make_port :: LocalNode -> IOx Term
 make_port localNode@LocalNode{registration,nodeState} = do
     id <- new_port nodeState
-    return $ port (getNodeName localNode) id (getCreation registration)
+    return $ port (getNodeName' localNode) id (getCreation registration)
 
 make_mailbox :: LocalNode -> IOx Mailbox
-make_mailbox localNode@LocalNode{nodeData,dFlags,nodeState,cookie} = do
+make_mailbox localNode@LocalNode{handshakeNode = handshakeNode@HandshakeNode{dFlags,nodeData},nodeState} = do
     self <- make_pid localNode
     queue <- toIOx newTQueueIO
     let mailbox = newMailbox nodeState self queue make_connection
@@ -99,7 +106,18 @@ make_mailbox localNode@LocalNode{nodeData,dFlags,nodeState,cookie} = do
   where
     make_connection :: Term -> IOx Connection
     make_connection remoteName = do
-        connectNodes (getNodeName localNode) nodeData dFlags remoteName cookie nodeState
+        let (remoteAlive, remoteHost) =
+                splitNodeName remoteName
+        remoteNode@NodeData{portNo = remotePort} <- lookupNode remoteAlive remoteHost
+        localVersion <- maybeErrorX illegalOperationErrorType
+                                    "version mismatch"
+                                    (matchDistributionVersion nodeData remoteNode)
+        let name = (Name localVersion dFlags (getNodeName handshakeNode))
+
+        sock <- connectSocket remoteHost remotePort >>= makeBuffered
+
+        doConnect (runPutSocket2 sock) (runGetSocket2 sock) handshakeNode name
+        newConnection sock nodeState remoteName
 
 getCreation :: (Maybe NodeRegistration) -> Word8
 getCreation = maybe 0 (fromIntegral . nr_creation)
@@ -110,13 +128,13 @@ newMailbox nodeState self queue connect =
             , deliverLink = \_fromPid -> do
                 undefined
             , deliverSend = \message -> do
-                atomicallyX $ writeTQueue queue message
+                liftIO $ atomically $ writeTQueue queue message
             , deliverExit = \_fromPid _reason -> do
                 undefined
             , deliverUnlink = \_fromPid -> do
                 undefined
             , deliverRegSend = \_fromPid message -> do
-                atomicallyX $ writeTQueue queue message
+                liftIO $ atomically $ writeTQueue queue message
             , deliverGroupLeader = \_fromPid -> do
                 undefined
             , deliverExit2 = \_fromPid _reason -> do
@@ -129,7 +147,7 @@ newMailbox nodeState self queue connect =
                 connection <- getConnectionForNode nodeState nodeName `catchX` const (connect nodeName)
                 sendControlMessage connection $ REG_SEND self regName message
             , receive = do
-                atomicallyX $ readTQueue queue
+                liftIO $ atomically $ readTQueue queue
             }
 
 closeLocalNode :: LocalNode -> IOx ()
