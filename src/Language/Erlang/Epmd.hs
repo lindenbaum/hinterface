@@ -17,10 +17,10 @@ import           Data.Binary.Get
 import           Data.Maybe
 
 import           Data.IOx
+import           Util.BufferedIOx
 import           Network.BufferedSocket
 import           Util.Binary
 import           Util.Socket
-import           Util.Util
 import           Language.Erlang.NodeData
 
 --------------------------------------------------------------------------------
@@ -149,14 +149,14 @@ registerNode node hostName = do
         (Just creation) -> do
             return $ NodeRegistration sock creation
         Nothing -> do
-            socketClose sock
+            closeBuffered sock
             errorX alreadyExistsErrorType (show $ aliveName node)
 
 --------------------------------------------------------------------------------
-sendRequest :: (Binary a, Binary b) => a -> BufferedSocket -> IOx b
+sendRequest :: (BufferedIOx s, Binary a, Binary b) => a -> s -> IOx b
 sendRequest req sock = do
-    runPutSocket sock req
-    runGetSocket sock
+    runPutBuffered sock req
+    runGetBuffered sock
 
 connectBufferedSocket :: BS.ByteString -- ^ hostName
                       -> IOx BufferedSocket
@@ -170,5 +170,5 @@ withBufferedSocket :: (Binary b)
 withBufferedSocket hostName f = do
     sock <- connectBufferedSocket hostName
     res <- f sock
-    socketClose sock
+    closeBuffered sock
     return res

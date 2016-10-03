@@ -21,9 +21,9 @@ import qualified Data.ByteString                as BS
 import           Data.Word
 
 import           Data.IOx
+import           Util.BufferedIOx
 import           Util.Socket
 import           Network.BufferedSocket
-import           Util.Util
 
 import           Language.Erlang.NodeState
 import           Language.Erlang.NodeData
@@ -69,7 +69,7 @@ registerLocalNode localNode@LocalNode{handshakeNode = hsn@HandshakeNode{hostName
       where
         accept = do
             sock' <- acceptSocket sock >>= makeBuffered
-            remoteName <- doAccept (runPutSocket sock') (runGetSocket sock') handshakeNode'
+            remoteName <- doAccept (runPutBuffered sock') (runGetBuffered sock') handshakeNode'
             newConnection sock' nodeState (atom remoteName)
 
 register :: LocalNode -> Term -> Term -> IOx ()
@@ -116,7 +116,7 @@ make_mailbox localNode@LocalNode{handshakeNode = handshakeNode@HandshakeNode{dFl
 
         sock <- connectSocket remoteHost remotePort >>= makeBuffered
 
-        doConnect (runPutSocket sock) (runGetSocket sock) handshakeNode name
+        doConnect (runPutBuffered sock) (runGetBuffered sock) handshakeNode name
         newConnection sock nodeState remoteName
 
 getCreation :: (Maybe NodeRegistration) -> Word8
@@ -152,7 +152,7 @@ newMailbox nodeState self queue connect =
 
 closeLocalNode :: LocalNode -> IOx ()
 closeLocalNode LocalNode{registration,nodeState,acceptor} = do
-    maybe (return ()) (socketClose . nr_sock) registration
+    maybe (return ()) (closeBuffered . nr_sock) registration
     getConnectedNodes nodeState >>= mapM_ (closeConnection . snd)
     maybe (return ()) closeAcceptor acceptor
   where

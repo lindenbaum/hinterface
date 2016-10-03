@@ -7,13 +7,14 @@ import           Test.Hspec
 import           Test.QuickCheck
 
 import qualified Data.ByteString           as BS
+import qualified Data.ByteString.Char8     as CS
 import qualified Data.ByteString.Lazy      as LBS
 import           Data.IORef
 import           Data.Binary
 import           Data.List                 ( nub, sort )
 
 import           Data.IOx
-import           Util.Binary
+import           Util.BufferedIOx
 
 import           Language.Erlang.NodeData
 import           Language.Erlang.Handshake
@@ -98,59 +99,94 @@ spec = do
                                 buffer1 <- newBuffer
 
                                 _ <- forkIOx $
-                                         doConnect (runPutBuffer buffer0) (runGetBuffer buffer1) handshakeNode name
-                                doAccept (runPutBuffer buffer1) (runGetBuffer buffer0) handshakeNode
+                                         doConnect (runPutBuffered buffer0) (runGetBuffered buffer1) handshakeNode name
+                                doAccept (runPutBuffered buffer1) (runGetBuffered buffer0) handshakeNode
             her_nodeName `shouldBe`
                 "alive@localhost.localdomain"
 
+        it "wrong cookie is rejected" $ do
+            let nodeData1 = NodeData { portNo = 50001
+                                     , nodeType = HiddenNode
+                                     , protocol = TcpIpV4
+                                     , hiVer = R6B
+                                     , loVer = R6B
+                                     , aliveName = "alive1"
+                                     , extra = ""
+                                     }
+                handshakeNode1 = HandshakeNode { hostName = "localhost.localdomain"
+                                               , dFlags = DistributionFlags []
+                                               , nodeData = nodeData1
+                                               , cookie = "cookie1"
+                                               }
+                name1 = Name { n_distVer = R6B
+                             , n_distFlags = DistributionFlags []
+                             , n_nodeName = "alive1@localhost.localdomain"
+                             }
+                nodeData2 = NodeData { portNo = 50002
+                                     , nodeType = HiddenNode
+                                     , protocol = TcpIpV4
+                                     , hiVer = R6B
+                                     , loVer = R6B
+                                     , aliveName = "alive2"
+                                     , extra = ""
+                                     }
+                handshakeNode2 = HandshakeNode { hostName = "localhost.localdomain"
+                                               , dFlags = DistributionFlags []
+                                               , nodeData = nodeData2
+                                               , cookie = "cookie2"
+                                               }
+                name2 = Name { n_distVer = R6B
+                             , n_distFlags = DistributionFlags []
+                             , n_nodeName = "alive2@localhost.localdomain"
+                             }
+            error_message <- fromIOx $
+                                 (do
+                                      buffer0 <- newBuffer
+                                      buffer1 <- newBuffer
+
+                                      _ <- forkIOx $
+                                               doConnect (runPutBuffered buffer0)
+                                                         (runGetBuffered buffer1)
+                                                         handshakeNode1
+                                                         name1
+                                      doAccept (runPutBuffered buffer1) (runGetBuffered buffer0) handshakeNode2) `catchX`
+                                     (return . CS.pack . show)
+            error_message `shouldBe`
+                "Cookie mismatch: user error"
+
+withLength16 :: LBS.ByteString -> LBS.ByteString
+withLength16 bytes = encode (fromIntegral (LBS.length bytes) :: Word16) `LBS.append` bytes
+
 newtype Buffer = Buffer { bufIO :: IORef BS.ByteString }
+
+instance BufferedIOx Buffer where
+    readBuffered = readBuffer
+    unreadBuffered = (. LBS.fromStrict) . writeBuffer
+    writeBuffered = writeBuffer
+    closeBuffered = const (return ())
 
 newBuffer :: IOx Buffer
 newBuffer = toIOx $ do
     Buffer <$> newIORef BS.empty
-
-writeBuffer :: Buffer -> LBS.ByteString -> IOx ()
-writeBuffer Buffer{bufIO} bytes =
-    toIOx $ do
-        atomicModifyIORef' bufIO (\buf -> (buf `BS.append` (LBS.toStrict bytes), ()))
 
 readBuffer :: Buffer -> Int -> IOx BS.ByteString
 readBuffer buffer@Buffer{bufIO} len
     | len < 0 = error $ "Bad length: " ++ show len
     | len == 0 = return BS.empty
     | otherwise = toIOx $ do
-          res <- atomicModifyIORef' bufIO
-                                    (\buf -> if BS.null buf
-                                             then (BS.empty, Nothing)
-                                             else let bufLen = BS.length buf
-                                                  in
-                                                      if len > bufLen
-                                                      then (BS.empty, (Just buf))
-                                                      else let (buf0, buf1) = BS.splitAt len buf
-                                                           in
-                                                               (buf1, Just buf0))
-          case res of
-              Nothing -> do
-                  fromIOx $ readBuffer buffer len
-              Just (ret) -> do
-                  return ret
+          atomicModifyIORef' bufIO
+                             (\buf -> if BS.null buf
+                                      then (BS.empty, Nothing)
+                                      else let bufLen = BS.length buf
+                                           in
+                                               if len > bufLen
+                                               then (BS.empty, (Just buf))
+                                               else let (buf0, buf1) = BS.splitAt len buf
+                                                    in
+                                                        (buf1, Just buf0)) >>=
+              maybe (fromIOx $ readBuffer buffer len) (return)
 
-runGetBuffer'' :: Buffer -> Get a -> IOx (Either String a)
-runGetBuffer'' = runGetA <$> readBuffer <*> unreadBuffer
-  where
-    unreadBuffer = (. LBS.fromStrict) . writeBuffer
-
-runGetBuffer' :: Buffer -> Get a -> IOx a
-runGetBuffer' s g = (runGetBuffer'' s g) >>= either (errorX userErrorType) (return)
-
-runGetBuffer :: (Binary a) => Buffer -> IOx a
-runGetBuffer = flip runGetBuffer' get
-
-runPutBuffer' :: Buffer -> Put -> IOx ()
-runPutBuffer' = runPutA <$> writeBuffer
-
-runPutBuffer :: (Binary a) => Buffer -> a -> IOx ()
-runPutBuffer = (. put) . runPutBuffer'
-
-withLength16 :: LBS.ByteString -> LBS.ByteString
-withLength16 bytes = encode (fromIntegral (LBS.length bytes) :: Word16) `LBS.append` bytes
+writeBuffer :: Buffer -> LBS.ByteString -> IOx ()
+writeBuffer Buffer{bufIO} bytes =
+    toIOx $ do
+        atomicModifyIORef' bufIO (\buf -> (buf `BS.append` (LBS.toStrict bytes), ()))

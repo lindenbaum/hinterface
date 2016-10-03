@@ -2,28 +2,31 @@ module Network.BufferedSocket
     ( BufferedSocket()
     , makeBuffered
     , socketPort
-    , socketRecv
-    , pushback
-    , socketSend
-    , socketClose
     ) where
 
 import           Control.Monad                  ( unless )
 import           Control.Monad.IO.Class         ( liftIO )
 
 import qualified Data.ByteString                as BS ( ByteString, append, empty, length, null, splitAt )
-import qualified Data.ByteString.Lazy           as BL ( ByteString )
+import qualified Data.ByteString.Lazy           as LBS ( ByteString )
 
 import qualified Network.Socket                 as S ( PortNumber, Socket, close, socketPort )
 import qualified Network.Socket.ByteString      as NBS ( recv )
 import qualified Network.Socket.ByteString.Lazy as NBL ( sendAll )
 
-import           Data.IORef                     ( IORef, modifyIORef', newIORef, readIORef, writeIORef )
+import           Data.IORef                     ( IORef, atomicModifyIORef', newIORef, writeIORef )
 
 import           Data.IOx
+import           Util.BufferedIOx
 
 --------------------------------------------------------------------------------
 newtype BufferedSocket = BufferedSocket (S.Socket, IORef BS.ByteString)
+
+instance BufferedIOx BufferedSocket where
+    readBuffered = socketRecv
+    unreadBuffered = pushback
+    writeBuffered = socketSend
+    closeBuffered = socketClose
 
 makeBuffered :: S.Socket -> IOx BufferedSocket
 makeBuffered sock = do
@@ -40,28 +43,25 @@ socketRecv (BufferedSocket (sock, bufIO)) len
     | len < 0 = error $ "Bad length: " ++ show len
     | len == 0 = return BS.empty
     | otherwise = toIOx $ do
-          buf <- readIORef bufIO
-          if BS.null buf
-              then do
-                  NBS.recv sock len
-              else do
-                  let bufLen = BS.length buf
-                  if len > bufLen
-                      then do
-                          writeIORef bufIO BS.empty
-                          return buf
-                      else do
-                          let (buf0, buf1) = BS.splitAt len buf
-                          writeIORef bufIO buf1
-                          return buf0
+          atomicModifyIORef' bufIO
+                             (\buf -> if BS.null buf
+                                      then (BS.empty, Nothing)
+                                      else let bufLen = BS.length buf
+                                           in
+                                               if len > bufLen
+                                               then (BS.empty, (Just buf))
+                                               else let (buf0, buf1) = BS.splitAt len buf
+                                                    in
+                                                        (buf1, Just buf0)) >>=
+              maybe (NBS.recv sock len) (return)
 
 pushback :: BufferedSocket -> BS.ByteString -> IOx ()
-pushback (BufferedSocket (_, bufIO)) buf0 = do
-    unless (BS.null buf0) $
+pushback (BufferedSocket (_, bufIO)) bytes = do
+    unless (BS.null bytes) $
         toIOx $ do
-            modifyIORef' bufIO $ BS.append buf0
+            atomicModifyIORef' bufIO (\buf -> (buf `BS.append` bytes, ()))
 
-socketSend :: BufferedSocket -> BL.ByteString -> IOx ()
+socketSend :: BufferedSocket -> LBS.ByteString -> IOx ()
 socketSend (BufferedSocket (sock, _)) bl =
     toIOx $ do
         NBL.sendAll sock bl
