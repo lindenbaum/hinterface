@@ -17,7 +17,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     Data.IOx
                      , Util.Socket
-                     , Util.BufferedSocket
+                     , Network.BufferedSocket
                      , Util.Binary
                      , Util.FloatCast
                      , Util.Util

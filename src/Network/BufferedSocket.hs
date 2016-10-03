@@ -1,4 +1,4 @@
-module Util.BufferedSocket
+module Network.BufferedSocket
     ( BufferedSocket()
     , makeBuffered
     , socketPort

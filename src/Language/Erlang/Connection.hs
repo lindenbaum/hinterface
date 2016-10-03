@@ -10,7 +10,7 @@ import           Control.Monad.IO.Class
 import           Control.Concurrent
 import           Control.Concurrent.STM
 
-import           Util.BufferedSocket            ( BufferedSocket, socketClose )
+import           Network.BufferedSocket         ( BufferedSocket, socketClose )
 import           Util.Util
 
 import           Data.IOx
@@ -63,7 +63,7 @@ sendLoop sock sendQueue =
   where
     send = do
         controlMessage <- liftIO $ atomically $ readTQueue sendQueue
-        runPutSocket2 sock controlMessage
+        runPutSocket sock controlMessage
 
 recvLoop :: BufferedSocket -> (TQueue ControlMessage, NodeState Term Term Mailbox Connection, Term) -> IOx ()
 recvLoop sock (sendQueue, nodeState, name) = do
@@ -74,7 +74,7 @@ recvLoop sock (sendQueue, nodeState, name) = do
                       throwX x))
   where
     recv = do
-        controlMessage <- runGetSocket2 sock
+        controlMessage <- runGetSocket sock
         deliver controlMessage `catchX` logX "deliver"
     deliver controlMessage = do
         case controlMessage of

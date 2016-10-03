@@ -22,7 +22,7 @@ import           Data.Word
 
 import           Data.IOx
 import           Util.Socket
-import           Util.BufferedSocket
+import           Network.BufferedSocket
 import           Util.Util
 
 import           Language.Erlang.NodeState
@@ -69,7 +69,7 @@ registerLocalNode localNode@LocalNode{handshakeNode = hsn@HandshakeNode{hostName
       where
         accept = do
             sock' <- acceptSocket sock >>= makeBuffered
-            remoteName <- doAccept (runPutSocket2 sock') (runGetSocket2 sock') handshakeNode'
+            remoteName <- doAccept (runPutSocket sock') (runGetSocket sock') handshakeNode'
             newConnection sock' nodeState (atom remoteName)
 
 register :: LocalNode -> Term -> Term -> IOx ()
@@ -116,7 +116,7 @@ make_mailbox localNode@LocalNode{handshakeNode = handshakeNode@HandshakeNode{dFl
 
         sock <- connectSocket remoteHost remotePort >>= makeBuffered
 
-        doConnect (runPutSocket2 sock) (runGetSocket2 sock) handshakeNode name
+        doConnect (runPutSocket sock) (runGetSocket sock) handshakeNode name
         newConnection sock nodeState remoteName
 
 getCreation :: (Maybe NodeRegistration) -> Word8

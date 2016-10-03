@@ -28,7 +28,7 @@ module Util.Binary
     ) where
 
 import qualified Data.ByteString      as BS
-import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy as LBS
 import           Data.Binary.Get
 import           Data.Binary.Put
 import           Data.Word
@@ -52,7 +52,7 @@ runGetA readA unreadA getA =
         chunk <- input
         if BS.null chunk then feed (k Nothing) input else feed (k (Just chunk)) input
 
-runPutA :: (BL.ByteString -> m ()) -> Put -> m ()
+runPutA :: (LBS.ByteString -> m ()) -> Put -> m ()
 runPutA = (. runPut)
 
 --------------------------------------------------------------------------------
@@ -109,14 +109,14 @@ putLength32beByteString bs = do
 putWithLength16be :: Put -> Put
 putWithLength16be putA = do
     let bl = runPut putA
-        len = BL.length bl
+        len = LBS.length bl
     putWord16be (fromIntegral len)
     putLazyByteString bl
 
 putWithLength32be :: Put -> Put
 putWithLength32be putA = do
     let bl = runPut putA
-        len = BL.length bl
+        len = LBS.length bl
     putWord32be (fromIntegral len)
     putLazyByteString bl
 

@@ -17,7 +17,7 @@ import           Data.Binary.Get
 import           Data.Maybe
 
 import           Data.IOx
-import           Util.BufferedSocket
+import           Network.BufferedSocket
 import           Util.Binary
 import           Util.Socket
 import           Util.Util
@@ -155,8 +155,8 @@ registerNode node hostName = do
 --------------------------------------------------------------------------------
 sendRequest :: (Binary a, Binary b) => a -> BufferedSocket -> IOx b
 sendRequest req sock = do
-    runPutSocket2 sock req
-    runGetSocket2 sock
+    runPutSocket sock req
+    runGetSocket sock
 
 connectBufferedSocket :: BS.ByteString -- ^ hostName
                       -> IOx BufferedSocket
