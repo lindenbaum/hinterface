@@ -38,8 +38,6 @@ module Language.Erlang.Term
       -- ** Matchers
     , match_atom
     , match_tuple
-      -- ** Utilities
-    , splitNodeName
     ) where
 
 import           Prelude               hiding ( id, length )
@@ -358,15 +356,6 @@ match_atom (Atom n) m
     | m == n = Just n
     | otherwise = Nothing
 match_atom _ _ = Nothing
-
---------------------------------------------------------------------------------
-splitNodeName :: Term -> (ByteString, ByteString)
-splitNodeName t@(Atom a) =
-    case BS.split (fromIntegral (ord '@')) a of
-        [ alive, host ] -> (alive, host)
-        _ -> error $ "Illegal node name: " ++ show t
-
-splitNodeName t = error $ "Illegal node name: " ++ show t
 
 --------------------------------------------------------------------------------
 instance Binary Term where

@@ -18,6 +18,7 @@ import           Control.Concurrent
 import           Control.Concurrent.STM
 
 import qualified Data.ByteString                as BS
+import           Data.Char
 import           Data.Word
 
 import           Data.IOx
@@ -40,23 +41,38 @@ data LocalNode = LocalNode { handshakeNode :: HandshakeNode
                            , acceptor      :: Maybe (Socket, ThreadId)
                            }
 
-newLocalNode :: Term -> BS.ByteString -> IOx LocalNode
+newLocalNode :: BS.ByteString -> BS.ByteString -> IOx LocalNode
 newLocalNode nodeName cookie = do
-    let (aliveName, hostName) = splitNodeName nodeName
-        nodeData = NodeData 0 HiddenNode TcpIpV4 R6B R6B aliveName ""
-        dFlags = DistributionFlags [ EXTENDED_REFERENCES
+    let dFlags = DistributionFlags [ EXTENDED_REFERENCES
                                    , FUN_TAGS
                                    , NEW_FUN_TAGS
                                    , EXTENDED_PIDS_PORTS
                                    , BIT_BINARIES
                                    , NEW_FLOATS
                                    ]
-        handshakeNode = HandshakeNode { hostName, dFlags, nodeData, cookie }
+        name = Name { n_distVer = R6B, n_distFlags = dFlags, n_nodeName = nodeName }
+        (aliveName, _hostName) =
+            splitNodeName nodeName
+        nodeData = NodeData { portNo = 0
+                            , nodeType = HiddenNode
+                            , protocol = TcpIpV4
+                            , hiVer = R6B
+                            , loVer = R6B
+                            , aliveName
+                            , extra = ""
+                            }
+        handshakeNode = HandshakeNode { name, nodeData, cookie }
     nodeState <- newNodeState
     return LocalNode { handshakeNode, registration = Nothing, nodeState, acceptor = Nothing }
 
+splitNodeName :: BS.ByteString -> (BS.ByteString, BS.ByteString)
+splitNodeName a = case BS.split (fromIntegral (ord '@')) a of
+    [ alive, host ] -> (alive, host)
+    _ -> error $ "Illegal node name: " ++ show a
+
 registerLocalNode :: LocalNode -> IOx LocalNode
-registerLocalNode localNode@LocalNode{handshakeNode = hsn@HandshakeNode{hostName,nodeData},nodeState} = do
+registerLocalNode localNode@LocalNode{handshakeNode = hsn@HandshakeNode{name = Name{n_nodeName},nodeData},nodeState} = do
+    let (_, hostName) = splitNodeName n_nodeName
     (sock, portNo) <- serverSocket hostName
     let nodeData' = nodeData { portNo }
         handshakeNode' = hsn { nodeData = nodeData' }
@@ -77,34 +93,30 @@ register LocalNode{nodeState} name pid' = do
     mbox <- getMailboxForPid nodeState pid'
     putMailboxForName nodeState name mbox
 
-getNodeName' :: LocalNode -> BS.ByteString
-getNodeName' LocalNode{handshakeNode} =
-    getNodeName handshakeNode
-
 make_pid :: LocalNode -> IOx Term
-make_pid localNode@LocalNode{registration,nodeState} = do
+make_pid LocalNode{handshakeNode = HandshakeNode{name = Name{n_nodeName}},registration,nodeState} = do
     (id, serial) <- new_pid nodeState
-    return $ pid (getNodeName' localNode) id serial (getCreation registration)
+    return $ pid n_nodeName id serial (getCreation registration)
 
 make_ref :: LocalNode -> IOx Term
-make_ref localNode@LocalNode{registration,nodeState} = do
+make_ref LocalNode{handshakeNode = HandshakeNode{name = Name{n_nodeName}},registration,nodeState} = do
     (refId0, refId1, refId2) <- new_ref nodeState
-    return $ ref (getNodeName' localNode) (getCreation registration) [ refId0, refId1, refId2 ]
+    return $ ref n_nodeName (getCreation registration) [ refId0, refId1, refId2 ]
 
 make_port :: LocalNode -> IOx Term
-make_port localNode@LocalNode{registration,nodeState} = do
+make_port LocalNode{handshakeNode = HandshakeNode{name = Name{n_nodeName}},registration,nodeState} = do
     id <- new_port nodeState
-    return $ port (getNodeName' localNode) id (getCreation registration)
+    return $ port n_nodeName id (getCreation registration)
 
 make_mailbox :: LocalNode -> IOx Mailbox
-make_mailbox localNode@LocalNode{handshakeNode = handshakeNode@HandshakeNode{dFlags,nodeData},nodeState} = do
+make_mailbox localNode@LocalNode{handshakeNode = handshakeNode@HandshakeNode{nodeData},nodeState} = do
     self <- make_pid localNode
     queue <- toIOx newTQueueIO
     let mailbox = newMailbox nodeState self queue make_connection
     putMailboxForPid nodeState self mailbox
     return mailbox
   where
-    make_connection :: Term -> IOx Connection
+    make_connection :: BS.ByteString -> IOx Connection
     make_connection remoteName = do
         let (remoteAlive, remoteHost) =
                 splitNodeName remoteName
@@ -112,17 +124,20 @@ make_mailbox localNode@LocalNode{handshakeNode = handshakeNode@HandshakeNode{dFl
         localVersion <- maybeErrorX illegalOperationErrorType
                                     "version mismatch"
                                     (matchDistributionVersion nodeData remoteNode)
-        let name = (Name localVersion dFlags (getNodeName handshakeNode))
-
+        -- let name = (Name localVersion dFlags (getNodeName handshakeNode))
         sock <- connectSocket remoteHost remotePort >>= makeBuffered
 
-        doConnect (runPutBuffered sock) (runGetBuffered sock) handshakeNode name
-        newConnection sock nodeState remoteName
+        doConnect (runPutBuffered sock) (runGetBuffered sock) handshakeNode
+        newConnection sock nodeState (atom remoteName)
 
 getCreation :: (Maybe NodeRegistration) -> Word8
 getCreation = maybe 0 (fromIntegral . nr_creation)
 
-newMailbox :: NodeState Term Term Mailbox Connection -> Term -> TQueue Term -> (Term -> IOx Connection) -> Mailbox
+newMailbox :: NodeState Term Term Mailbox Connection
+           -> Term
+           -> TQueue Term
+           -> (BS.ByteString -> IOx Connection)
+           -> Mailbox
 newMailbox nodeState self queue connect =
     Mailbox { getPid = self
             , deliverLink = \_fromPid -> do
@@ -141,10 +156,10 @@ newMailbox nodeState self queue connect =
                 undefined
             , send = \toPid message -> do
                 let nodeName = node toPid
-                connection <- getConnectionForNode nodeState nodeName `catchX` const (connect nodeName)
+                connection <- getConnectionForNode nodeState nodeName `catchX` const (connect (atom_name nodeName))
                 sendControlMessage connection $ SEND toPid message
             , sendReg = \regName nodeName message -> do
-                connection <- getConnectionForNode nodeState nodeName `catchX` const (connect nodeName)
+                connection <- getConnectionForNode nodeState nodeName `catchX` const (connect (atom_name nodeName))
                 sendControlMessage connection $ REG_SEND self regName message
             , receive = do
                 liftIO $ atomically $ readTQueue queue

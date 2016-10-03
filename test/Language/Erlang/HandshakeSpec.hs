@@ -77,7 +77,11 @@ spec = do
 
     describe "doConnect and doAccept work together" $ do
         it "correct cookie is accepted" $ do
-            let nodeData = NodeData { portNo = 50000
+            let name = Name { n_distVer = R6B
+                            , n_distFlags = DistributionFlags []
+                            , n_nodeName = "alive@localhost.localdomain"
+                            }
+                nodeData = NodeData { portNo = 50000
                                     , nodeType = HiddenNode
                                     , protocol = TcpIpV4
                                     , hiVer = R6B
@@ -85,27 +89,24 @@ spec = do
                                     , aliveName = "alive"
                                     , extra = ""
                                     }
-                handshakeNode = HandshakeNode { hostName = "localhost.localdomain"
-                                              , dFlags = DistributionFlags []
-                                              , nodeData
-                                              , cookie = "cookie"
-                                              }
-                name = Name { n_distVer = R6B
-                            , n_distFlags = DistributionFlags []
-                            , n_nodeName = "alive@localhost.localdomain"
-                            }
+                handshakeNode = HandshakeNode { name, nodeData, cookie = "cookie" }
+
             her_nodeName <- fromIOx $ do
                                 buffer0 <- newBuffer
                                 buffer1 <- newBuffer
 
                                 _ <- forkIOx $
-                                         doConnect (runPutBuffered buffer0) (runGetBuffered buffer1) handshakeNode name
+                                         doConnect (runPutBuffered buffer0) (runGetBuffered buffer1) handshakeNode
                                 doAccept (runPutBuffered buffer1) (runGetBuffered buffer0) handshakeNode
             her_nodeName `shouldBe`
                 "alive@localhost.localdomain"
 
         it "wrong cookie is rejected" $ do
-            let nodeData1 = NodeData { portNo = 50001
+            let name1 = Name { n_distVer = R6B
+                             , n_distFlags = DistributionFlags []
+                             , n_nodeName = "alive1@localhost.localdomain"
+                             }
+                nodeData1 = NodeData { portNo = 50001
                                      , nodeType = HiddenNode
                                      , protocol = TcpIpV4
                                      , hiVer = R6B
@@ -113,14 +114,10 @@ spec = do
                                      , aliveName = "alive1"
                                      , extra = ""
                                      }
-                handshakeNode1 = HandshakeNode { hostName = "localhost.localdomain"
-                                               , dFlags = DistributionFlags []
-                                               , nodeData = nodeData1
-                                               , cookie = "cookie1"
-                                               }
-                name1 = Name { n_distVer = R6B
+                handshakeNode1 = HandshakeNode { name = name1, nodeData = nodeData1, cookie = "cookie1" }
+                name2 = Name { n_distVer = R6B
                              , n_distFlags = DistributionFlags []
-                             , n_nodeName = "alive1@localhost.localdomain"
+                             , n_nodeName = "alive2@localhost.localdomain"
                              }
                 nodeData2 = NodeData { portNo = 50002
                                      , nodeType = HiddenNode
@@ -130,15 +127,7 @@ spec = do
                                      , aliveName = "alive2"
                                      , extra = ""
                                      }
-                handshakeNode2 = HandshakeNode { hostName = "localhost.localdomain"
-                                               , dFlags = DistributionFlags []
-                                               , nodeData = nodeData2
-                                               , cookie = "cookie2"
-                                               }
-                name2 = Name { n_distVer = R6B
-                             , n_distFlags = DistributionFlags []
-                             , n_nodeName = "alive2@localhost.localdomain"
-                             }
+                handshakeNode2 = HandshakeNode { name = name2, nodeData = nodeData2, cookie = "cookie2" }
             error_message <- fromIOx $
                                  (do
                                       buffer0 <- newBuffer
@@ -148,7 +137,6 @@ spec = do
                                                doConnect (runPutBuffered buffer0)
                                                          (runGetBuffered buffer1)
                                                          handshakeNode1
-                                                         name1
                                       doAccept (runPutBuffered buffer1) (runGetBuffered buffer0) handshakeNode2) `catchX`
                                      (return . CS.pack . show)
             error_message `shouldBe`

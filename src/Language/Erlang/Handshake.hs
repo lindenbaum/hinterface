@@ -2,7 +2,6 @@
 
 module Language.Erlang.Handshake
     ( HandshakeNode(..)
-    , getNodeName
     , doConnect
     , doAccept
     , Name(..)
@@ -26,15 +25,10 @@ import           Language.Erlang.Digest
 import           Language.Erlang.NodeData
 
 --------------------------------------------------------------------------------
-data HandshakeNode = HandshakeNode { hostName :: BS.ByteString
-                                   , dFlags   :: DistributionFlags
+data HandshakeNode = HandshakeNode { name     :: Name
                                    , nodeData :: NodeData
                                    , cookie   :: BS.ByteString
                                    }
-
-getNodeName :: HandshakeNode -> BS.ByteString
-getNodeName HandshakeNode{hostName,nodeData = NodeData{aliveName}} =
-    aliveName `BS.append` "@" `BS.append` hostName
 
 --------------------------------------------------------------------------------
 nodeTypeR6, challengeStatus, challengeReply, challengeAck :: Char
@@ -151,8 +145,8 @@ instance Binary ChallengeAck where
         return ChallengeAck { ca_digest }
 
 --------------------------------------------------------------------------------
-doConnect :: (forall o. Binary o => o -> IOx ()) -> (forall i. (Binary i) => IOx i) -> HandshakeNode -> Name -> IOx ()
-doConnect send recv HandshakeNode{nodeData = NodeData{loVer,hiVer},cookie} name@Name{n_distVer = our_distVer} = do
+doConnect :: (forall o. Binary o => o -> IOx ()) -> (forall i. (Binary i) => IOx i) -> HandshakeNode -> IOx ()
+doConnect send recv HandshakeNode{name = name@Name{n_distVer = our_distVer},nodeData = NodeData{loVer,hiVer},cookie} = do
     send name
 
     her_status <- recv
@@ -172,18 +166,14 @@ doConnect send recv HandshakeNode{nodeData = NodeData{loVer,hiVer},cookie} name@
 
 --------------------------------------------------------------------------------
 doAccept :: (forall o. Binary o => o -> IOx ()) -> (forall i. (Binary i) => IOx i) -> HandshakeNode -> IOx BS.ByteString
-doAccept send recv handshakeNode@HandshakeNode{dFlags,nodeData = NodeData{loVer,hiVer},cookie} = do
+doAccept send recv HandshakeNode{name = Name{n_distFlags,n_nodeName},nodeData = NodeData{loVer,hiVer},cookie} = do
     Name{n_distVer = her_distVer,n_distFlags = her_distFlags,n_nodeName = her_nodeName} <- recv
     checkVersionRange her_distVer loVer hiVer
 
     send Ok
 
     our_challenge <- genChallenge
-    send Challenge { c_distVer = R6B
-                   , c_distFlags = dFlags
-                   , c_challenge = our_challenge
-                   , c_nodeName = getNodeName handshakeNode
-                   }
+    send Challenge { c_distVer = R6B, c_distFlags = n_distFlags, c_challenge = our_challenge, c_nodeName = n_nodeName }
 
     ChallengeReply{cr_challenge = her_challenge,cr_digest = her_digest} <- recv
     checkCookie her_digest our_challenge cookie
