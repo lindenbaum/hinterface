@@ -194,4 +194,4 @@ matchWord8 expected = do
 
 matchChar8 :: Char -> Get ()
 matchChar8 expected = do
-    matchWord8 $ fromIntegral $ ord expected--------------------------------------------------------------------------------
+    matchWord8 $ fromIntegral $ ord expected

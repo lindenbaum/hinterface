@@ -89,15 +89,15 @@ spec = do
                                     , aliveName = "alive"
                                     , extra = ""
                                     }
-                handshakeNode = HandshakeNode { name, nodeData, cookie = "cookie" }
+                handshakeData = HandshakeData { name, nodeData, cookie = "cookie" }
 
             her_nodeName <- fromIOx $ do
                                 buffer0 <- newBuffer
                                 buffer1 <- newBuffer
 
                                 _ <- forkIOx $
-                                         doConnect (runPutBuffered buffer0) (runGetBuffered buffer1) handshakeNode
-                                doAccept (runPutBuffered buffer1) (runGetBuffered buffer0) handshakeNode
+                                         doConnect (runPutBuffered buffer0) (runGetBuffered buffer1) handshakeData
+                                doAccept (runPutBuffered buffer1) (runGetBuffered buffer0) handshakeData
             her_nodeName `shouldBe`
                 "alive@localhost.localdomain"
 
@@ -114,7 +114,7 @@ spec = do
                                      , aliveName = "alive1"
                                      , extra = ""
                                      }
-                handshakeNode1 = HandshakeNode { name = name1, nodeData = nodeData1, cookie = "cookie1" }
+                handshakeData1 = HandshakeData { name = name1, nodeData = nodeData1, cookie = "cookie1" }
                 name2 = Name { n_distVer = R6B
                              , n_distFlags = DistributionFlags []
                              , n_nodeName = "alive2@localhost.localdomain"
@@ -127,7 +127,7 @@ spec = do
                                      , aliveName = "alive2"
                                      , extra = ""
                                      }
-                handshakeNode2 = HandshakeNode { name = name2, nodeData = nodeData2, cookie = "cookie2" }
+                handshakeData2 = HandshakeData { name = name2, nodeData = nodeData2, cookie = "cookie2" }
             error_message <- fromIOx $
                                  (do
                                       buffer0 <- newBuffer
@@ -136,8 +136,8 @@ spec = do
                                       _ <- forkIOx $
                                                doConnect (runPutBuffered buffer0)
                                                          (runGetBuffered buffer1)
-                                                         handshakeNode1
-                                      doAccept (runPutBuffered buffer1) (runGetBuffered buffer0) handshakeNode2) `catchX`
+                                                         handshakeData1
+                                      doAccept (runPutBuffered buffer1) (runGetBuffered buffer0) handshakeData2) `catchX`
                                      (return . CS.pack . show)
             error_message `shouldBe`
                 "Cookie mismatch: user error"

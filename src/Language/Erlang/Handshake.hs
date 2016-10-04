@@ -1,7 +1,7 @@
 {-# LANGUAGE Rank2Types #-}
 
 module Language.Erlang.Handshake
-    ( HandshakeNode(..)
+    ( HandshakeData(..)
     , doConnect
     , doAccept
     , Name(..)
@@ -25,7 +25,7 @@ import           Language.Erlang.Digest
 import           Language.Erlang.NodeData
 
 --------------------------------------------------------------------------------
-data HandshakeNode = HandshakeNode { name     :: Name
+data HandshakeData = HandshakeData { name     :: Name
                                    , nodeData :: NodeData
                                    , cookie   :: BS.ByteString
                                    }
@@ -145,8 +145,8 @@ instance Binary ChallengeAck where
         return ChallengeAck { ca_digest }
 
 --------------------------------------------------------------------------------
-doConnect :: (forall o. Binary o => o -> IOx ()) -> (forall i. (Binary i) => IOx i) -> HandshakeNode -> IOx ()
-doConnect send recv HandshakeNode{name = name@Name{n_distVer = our_distVer},nodeData = NodeData{loVer,hiVer},cookie} = do
+doConnect :: (forall o. Binary o => o -> IOx ()) -> (forall i. (Binary i) => IOx i) -> HandshakeData -> IOx ()
+doConnect send recv HandshakeData{name = name@Name{n_distVer = our_distVer},nodeData = NodeData{loVer,hiVer},cookie} = do
     send name
 
     her_status <- recv
@@ -165,8 +165,8 @@ doConnect send recv HandshakeNode{name = name@Name{n_distVer = our_distVer},node
     checkCookie her_digest our_challenge cookie
 
 --------------------------------------------------------------------------------
-doAccept :: (forall o. Binary o => o -> IOx ()) -> (forall i. (Binary i) => IOx i) -> HandshakeNode -> IOx BS.ByteString
-doAccept send recv HandshakeNode{name = Name{n_distFlags,n_nodeName},nodeData = NodeData{loVer,hiVer},cookie} = do
+doAccept :: (forall o. Binary o => o -> IOx ()) -> (forall i. (Binary i) => IOx i) -> HandshakeData -> IOx BS.ByteString
+doAccept send recv HandshakeData{name = Name{n_distFlags,n_nodeName},nodeData = NodeData{loVer,hiVer},cookie} = do
     Name{n_distVer = her_distVer,n_distFlags = her_distFlags,n_nodeName = her_nodeName} <- recv
     checkVersionRange her_distVer loVer hiVer
 

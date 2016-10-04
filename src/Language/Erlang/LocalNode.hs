@@ -35,7 +35,7 @@ import           Language.Erlang.ControlMessage
 import           Language.Erlang.Connection
 import           Language.Erlang.Mailbox
 
-data LocalNode = LocalNode { handshakeNode :: HandshakeNode
+data LocalNode = LocalNode { handshakeData :: HandshakeData
                            , registration  :: Maybe NodeRegistration
                            , nodeState     :: NodeState Term Term Mailbox Connection
                            , acceptor      :: Maybe (Socket, ThreadId)
@@ -61,9 +61,9 @@ newLocalNode nodeName cookie = do
                             , aliveName
                             , extra = ""
                             }
-        handshakeNode = HandshakeNode { name, nodeData, cookie }
+        handshakeData = HandshakeData { name, nodeData, cookie }
     nodeState <- newNodeState
-    return LocalNode { handshakeNode, registration = Nothing, nodeState, acceptor = Nothing }
+    return LocalNode { handshakeData, registration = Nothing, nodeState, acceptor = Nothing }
 
 splitNodeName :: BS.ByteString -> (BS.ByteString, BS.ByteString)
 splitNodeName a = case BS.split (fromIntegral (ord '@')) a of
@@ -71,21 +71,21 @@ splitNodeName a = case BS.split (fromIntegral (ord '@')) a of
     _ -> error $ "Illegal node name: " ++ show a
 
 registerLocalNode :: LocalNode -> IOx LocalNode
-registerLocalNode localNode@LocalNode{handshakeNode = hsn@HandshakeNode{name = Name{n_nodeName},nodeData},nodeState} = do
+registerLocalNode localNode@LocalNode{handshakeData = hsn@HandshakeData{name = Name{n_nodeName},nodeData},nodeState} = do
     let (_, hostName) = splitNodeName n_nodeName
     (sock, portNo) <- serverSocket hostName
     let nodeData' = nodeData { portNo }
-        handshakeNode' = hsn { nodeData = nodeData' }
-    threadId <- forkIOx (acceptLoop sock handshakeNode')
+        handshakeData' = hsn { nodeData = nodeData' }
+    threadId <- forkIOx (acceptLoop sock handshakeData')
     registration <- Just <$> registerNode nodeData' hostName
-    return localNode { handshakeNode = handshakeNode', registration, acceptor = Just (sock, threadId) }
+    return localNode { handshakeData = handshakeData', registration, acceptor = Just (sock, threadId) }
   where
-    acceptLoop sock handshakeNode' =
+    acceptLoop sock handshakeData' =
         forever accept
       where
         accept = do
             sock' <- acceptSocket sock >>= makeBuffered
-            remoteName <- doAccept (runPutBuffered sock') (runGetBuffered sock') handshakeNode'
+            remoteName <- doAccept (runPutBuffered sock') (runGetBuffered sock') handshakeData'
             newConnection sock' nodeState (atom remoteName)
 
 register :: LocalNode -> Term -> Term -> IOx ()
@@ -94,22 +94,22 @@ register LocalNode{nodeState} name pid' = do
     putMailboxForName nodeState name mbox
 
 make_pid :: LocalNode -> IOx Term
-make_pid LocalNode{handshakeNode = HandshakeNode{name = Name{n_nodeName}},registration,nodeState} = do
+make_pid LocalNode{handshakeData = HandshakeData{name = Name{n_nodeName}},registration,nodeState} = do
     (id, serial) <- new_pid nodeState
     return $ pid n_nodeName id serial (getCreation registration)
 
 make_ref :: LocalNode -> IOx Term
-make_ref LocalNode{handshakeNode = HandshakeNode{name = Name{n_nodeName}},registration,nodeState} = do
+make_ref LocalNode{handshakeData = HandshakeData{name = Name{n_nodeName}},registration,nodeState} = do
     (refId0, refId1, refId2) <- new_ref nodeState
     return $ ref n_nodeName (getCreation registration) [ refId0, refId1, refId2 ]
 
 make_port :: LocalNode -> IOx Term
-make_port LocalNode{handshakeNode = HandshakeNode{name = Name{n_nodeName}},registration,nodeState} = do
+make_port LocalNode{handshakeData = HandshakeData{name = Name{n_nodeName}},registration,nodeState} = do
     id <- new_port nodeState
     return $ port n_nodeName id (getCreation registration)
 
 make_mailbox :: LocalNode -> IOx Mailbox
-make_mailbox localNode@LocalNode{handshakeNode = handshakeNode@HandshakeNode{nodeData},nodeState} = do
+make_mailbox localNode@LocalNode{handshakeData = handshakeData@HandshakeData{nodeData},nodeState} = do
     self <- make_pid localNode
     queue <- toIOx newTQueueIO
     let mailbox = newMailbox nodeState self queue make_connection
@@ -124,10 +124,10 @@ make_mailbox localNode@LocalNode{handshakeNode = handshakeNode@HandshakeNode{nod
         localVersion <- maybeErrorX illegalOperationErrorType
                                     "version mismatch"
                                     (matchDistributionVersion nodeData remoteNode)
-        -- let name = (Name localVersion dFlags (getNodeName handshakeNode))
+        -- let name = (Name localVersion dFlags (getNodeName handshakeData))
         sock <- connectSocket remoteHost remotePort >>= makeBuffered
 
-        doConnect (runPutBuffered sock) (runGetBuffered sock) handshakeNode
+        doConnect (runPutBuffered sock) (runGetBuffered sock) handshakeData
         newConnection sock nodeState (atom remoteName)
 
 getCreation :: (Maybe NodeRegistration) -> Word8
