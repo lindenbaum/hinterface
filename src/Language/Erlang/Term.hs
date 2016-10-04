@@ -1,3 +1,8 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Language.Erlang.Term
     ( -- * External Term Format
       Term()
@@ -10,8 +15,11 @@ module Language.Erlang.Term
     , integer
     , float
     , atom
+      -- *** Static atoms
+    , SAtom(..)
     , port
     , pid
+    , Pid(..)
     , tuple
     , string
     , list
@@ -42,6 +50,7 @@ module Language.Erlang.Term
     , splitNodeName
     ) where
 
+import GHC.TypeLits
 import           Prelude               hiding ( id, length )
 import qualified Prelude               as P ( id )
 
@@ -52,7 +61,7 @@ import           Data.String
 import           Data.ByteString       ( ByteString )
 import           Data.ByteString.Char8 ( unpack )
 import qualified Data.ByteString       as BS ( head, length, split, tail, unpack )
-import qualified Data.ByteString.Char8 as CS ( pack )
+import qualified Data.ByteString.Char8 as CS ( pack, unpack )
 import           Data.Vector           ( (!), Vector, fromList, toList )
 import qualified Data.Vector           as V ( length, replicateM, tail )
 import qualified Data.List             as L ( length )
@@ -200,12 +209,70 @@ showByteStringAsIntList b
 instance IsString Term where
     fromString = atom . CS.pack
 
+instance FromTerm Term where
+  fromTerm = Just
+
+instance ToTerm Term where
+  toTerm = P.id
+
 --------------------------------------------------------------------------------
 class ToTerm a where
     toTerm :: a -> Term
 
 class FromTerm a where
     fromTerm :: Term -> Maybe a
+
+instance (FromTerm a, FromTerm b) => FromTerm (a,b) where
+  fromTerm (Tuple ts) | V.length ts == 2 = (,) <$> fromTerm (ts ! 0)
+                                              <*> fromTerm (ts ! 1)
+  fromTerm _                            = Nothing
+
+instance (FromTerm a, FromTerm b, FromTerm c) => FromTerm (a,b,c) where
+  fromTerm (Tuple ts) | V.length ts == 3 = (,,) <$> fromTerm (ts ! 0)
+                                               <*> fromTerm (ts ! 1)
+                                               <*> fromTerm (ts ! 2)
+  fromTerm _                            = Nothing
+
+instance (FromTerm a, FromTerm b, FromTerm c,FromTerm d) => FromTerm (a,b,c,d) where
+  fromTerm (Tuple ts) | V.length ts == 4 = (,,,) <$> fromTerm (ts ! 0)
+                                                <*> fromTerm (ts ! 1)
+                                                <*> fromTerm (ts ! 2)
+                                                <*> fromTerm (ts ! 3)
+  fromTerm _                            = Nothing
+
+instance (FromTerm a, FromTerm b, FromTerm c,FromTerm d,FromTerm e) => FromTerm (a,b,c,d,e) where
+  fromTerm (Tuple ts) | V.length ts == 5 = (,,,,) <$> fromTerm (ts ! 0)
+                                                 <*> fromTerm (ts ! 1)
+                                                 <*> fromTerm (ts ! 2)
+                                                 <*> fromTerm (ts ! 3)
+                                                 <*> fromTerm (ts ! 4)
+  fromTerm _                            = Nothing
+
+instance (ToTerm a, ToTerm b) => ToTerm (a,b) where
+  toTerm (a,b) = tuple [toTerm a, toTerm b]
+
+instance (ToTerm a, ToTerm b, ToTerm c) => ToTerm (a,b,c) where
+  toTerm (a,b,c) = tuple [toTerm a, toTerm b, toTerm c]
+
+instance (ToTerm a, ToTerm b, ToTerm c, ToTerm d) => ToTerm (a,b,c,d) where
+  toTerm (a,b,c,d) = tuple [toTerm a, toTerm b, toTerm c, toTerm d]
+
+instance (ToTerm a, ToTerm b, ToTerm c, ToTerm d, ToTerm e) => ToTerm (a,b,c,d,e) where
+  toTerm (a,b,c,d,e) = tuple [toTerm a, toTerm b, toTerm c, toTerm d, toTerm e]
+
+instance FromTerm Integer where
+  fromTerm (Integer i) = Just i
+  fromTerm _           = Nothing
+
+instance ToTerm Integer where
+  toTerm = Integer
+
+instance FromTerm String where
+  fromTerm (String s) = Just (CS.unpack s)
+  fromTerm _          = Nothing
+
+instance ToTerm String where
+  toTerm = String . CS.pack
 
 --------------------------------------------------------------------------------
 -- | Construct an integer
@@ -223,6 +290,20 @@ atom :: ByteString -- ^ AtomName
      -> Term
 atom = Atom
 
+-- | A static/constant atom.
+data SAtom (atom :: Symbol) = SAtom
+
+instance forall (atom :: Symbol) . (KnownSymbol atom) => FromTerm (SAtom atom) where
+  fromTerm (Atom atom') =
+    if atom' == CS.pack (symbolVal (SAtom :: SAtom atom))
+    then Just SAtom
+    else Nothing
+  fromTerm _ = Nothing
+
+instance forall (atom :: Symbol) . (KnownSymbol atom) => ToTerm (SAtom atom) where
+  toTerm = atom . CS.pack . symbolVal
+
+
 -- reference
 -- | Construct a port
 port :: ByteString -- ^ Node name
@@ -233,6 +314,8 @@ port = Port
 
 pid :: ByteString -> Word32 -> Word32 -> Word8 -> Term
 pid = Pid
+
+newtype Pid = MkPid Term deriving (ToTerm, FromTerm)
 
 -- | Construct a tuple
 tuple :: [Term] -- ^ Elements
