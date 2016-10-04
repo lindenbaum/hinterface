@@ -5,11 +5,12 @@ module Language.Erlang.Connection
     , closeConnection
     ) where
 
+import           Control.Monad
+import           Control.Monad.IO.Class
 import           Control.Concurrent
 import           Control.Concurrent.STM
 
-import           Util.BufferedSocket            ( BufferedSocket, socketClose )
-import           Util.Util
+import           Util.BufferedIOx
 
 import           Data.IOx
 import           Language.Erlang.NodeState
@@ -23,7 +24,7 @@ data Connection = Connection { sendQueue :: TQueue ControlMessage
                              }
 
 --------------------------------------------------------------------------------
-newConnection :: BufferedSocket -> NodeState Term Term Mailbox Connection -> Term -> IOx Connection
+newConnection :: (BufferedIOx s) => s -> NodeState Term Term Mailbox Connection -> Term -> IOx Connection
 newConnection sock nodeState name = do
     (sendQueue, sendThread) <- (newSender sendLoop) sock
     recvThread <- (newReceiver recvLoop (sendQueue, nodeState, name)) sock
@@ -44,40 +45,40 @@ newConnection sock nodeState name = do
         removeConnectionForNode nodeState name
         killThreadX s
         killThreadX r
-        socketClose sock
+        closeBuffered sock
 
 sendControlMessage :: Connection -> ControlMessage -> IOx ()
 sendControlMessage Connection{sendQueue} controlMessage = do
-    atomicallyX $ writeTQueue sendQueue controlMessage
+    liftIO $ atomically $ writeTQueue sendQueue controlMessage
 
 closeConnection :: Connection -> IOx ()
 closeConnection Connection{onClose} = do
     onClose
 
 --------------------------------------------------------------------------------
-sendLoop :: BufferedSocket -> (TQueue ControlMessage) -> IOx ()
+sendLoop :: (BufferedIOx s) => s -> (TQueue ControlMessage) -> IOx ()
 sendLoop sock sendQueue =
-    foreverX (send `catchX` logX "send")
+    forever (send `catchX` logX "send")
   where
     send = do
-        controlMessage <- atomicallyX $ readTQueue sendQueue
-        runPutSocket2 sock controlMessage
+        controlMessage <- liftIO $ atomically $ readTQueue sendQueue
+        runPutBuffered sock controlMessage
 
-recvLoop :: BufferedSocket -> (TQueue ControlMessage, NodeState Term Term Mailbox Connection, Term) -> IOx ()
+recvLoop :: (BufferedIOx s) => s -> (TQueue ControlMessage, NodeState Term Term Mailbox Connection, Term) -> IOx ()
 recvLoop sock (sendQueue, nodeState, name) = do
-    foreverX (recv `catchX`
-                  (\x -> do
-                       logX "recv" x
-                       getConnectionForNode nodeState name >>= closeConnection
-                       throwX x))
+    forever (recv `catchX`
+                 (\x -> do
+                      logX "recv" x
+                      getConnectionForNode nodeState name >>= closeConnection
+                      throwX x))
   where
     recv = do
-        controlMessage <- runGetSocket2 sock
+        controlMessage <- runGetBuffered sock
         deliver controlMessage `catchX` logX "deliver"
     deliver controlMessage = do
         case controlMessage of
             TICK -> do
-                atomicallyX $ writeTQueue sendQueue TICK
+                liftIO $ atomically $ writeTQueue sendQueue TICK
             LINK fromPid toPid -> do
                 mailbox <- getMailboxForPid nodeState toPid
                 deliverLink mailbox fromPid

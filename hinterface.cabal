@@ -16,11 +16,11 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Data.IOx
+                     , Util.BufferedIOx
                      , Util.Socket
-                     , Util.BufferedSocket
+                     , Network.BufferedSocket
                      , Util.Binary
                      , Util.FloatCast
-                     , Util.Util
                      , Language.Erlang.NodeState
                      , Language.Erlang.NodeData
                      , Language.Erlang.Epmd
@@ -60,6 +60,8 @@ executable hinterface
   build-depends:       base >= 4.8 && < 5
                      , hinterface
                      , bytestring
+                     , transformers
+  other-modules:       Person
   default-language:    Haskell2010
 
 test-suite hinterface-test
@@ -72,9 +74,11 @@ test-suite hinterface-test
                      , QuickCheck
                      , bytestring
                      , binary
+                     , transformers
   other-modules:       Data.IOxSpec
                      , Language.Erlang.NodeDataSpec
                      , Language.Erlang.HandshakeSpec
+                     , Language.Erlang.ControlMessageSpec
   default-extensions:  OverloadedStrings
                      , NamedFieldPuns
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
