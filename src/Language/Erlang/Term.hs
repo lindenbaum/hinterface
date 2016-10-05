@@ -13,6 +13,7 @@ module Language.Erlang.Term
       -- ** Conversion to and from External Term Format
     , ToTerm(..)
     , FromTerm(..)
+    , fromTermA
       -- ** Constructors
     , integer
       -- *** Static numbers
@@ -56,6 +57,7 @@ module Language.Erlang.Term
 import           GHC.TypeLits
 import           Prelude               hiding ( id, length )
 import qualified Prelude               as P ( id )
+import           Control.Applicative   ( Alternative(..) )
 import           Control.Category      ( (>>>) )
 import           Control.Monad         as M ( replicateM )
 import           Data.String
@@ -221,6 +223,12 @@ class ToTerm a where
 
 class FromTerm a where
     fromTerm :: Term -> Maybe a
+
+fromTermA :: (FromTerm a, Alternative m) => Term -> m a
+fromTermA t =
+  case fromTerm t of
+    Just x -> pure x
+    Nothing -> empty
 
 instance FromTerm () where
     fromTerm (Tuple ts) | V.length ts == 0 = Just ()
@@ -590,7 +598,7 @@ instance Binary MapEntry where
         MapEntry <$> get <*> get
 
 --------------------------------------------------------------------------------
-putTerm :: (Show t, ToTerm t) => t -> Put
+putTerm :: (ToTerm t) => t -> Put
 putTerm t = do
     putWord8 magicVersion
     put (toTerm t)

@@ -9,19 +9,19 @@ module Language.Erlang.Epmd
     , NodeRegistration(..)
     ) where
 
+import           Data.Binary
+import           Data.Binary.Get
+import           Data.Binary.Put
 import qualified Data.ByteString            as BS
 import qualified Data.ByteString.Lazy.Char8 as CL
-import           Data.Binary
-import           Data.Binary.Put
-import           Data.Binary.Get
 import           Data.Maybe
 
 import           Data.IOx
-import           Util.BufferedIOx
+import           Language.Erlang.NodeData
 import           Network.BufferedSocket
 import           Util.Binary
+import           Util.BufferedIOx
 import           Util.Socket
-import           Language.Erlang.NodeData
 
 --------------------------------------------------------------------------------
 epmdPort :: Word16
@@ -163,8 +163,7 @@ connectBufferedSocket :: BS.ByteString -- ^ hostName
 connectBufferedSocket hostName = do
     connectSocket hostName epmdPort >>= makeBuffered
 
-withBufferedSocket :: (Binary b)
-                   => BS.ByteString -- ^ hostName
+withBufferedSocket ::  BS.ByteString -- ^ hostName
                    -> (BufferedSocket -> IOx b)
                    -> IOx b
 withBufferedSocket hostName f = do

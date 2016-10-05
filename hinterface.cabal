@@ -1,5 +1,5 @@
 name:                hinterface
-version:             0.1.0.0
+version:             0.2.0.0
 synopsis:            Haskell / Erlang interoperability library
 description:         Please see README.md
 homepage:            https://github.com/LTI2000/hinterface
@@ -36,7 +36,7 @@ library
   ghc-options:         -Wall -O2
   build-depends:       QuickCheck >= 2.8 && < 3
                      , array
-                     , base >= 4.8 && < 5
+                     , base >= 4.9 && < 5
                      , binary
                      , bytestring
                      , containers
@@ -58,7 +58,7 @@ executable hinterface
   default-extensions:  OverloadedStrings
                      , NamedFieldPuns
   ghc-options:         -Wall -O2 -threaded -rtsopts -with-rtsopts=-N
-  build-depends:       base >= 4.8 && < 5
+  build-depends:       base >= 4.9 && < 5
                      , hinterface
                      , bytestring
                      , transformers
@@ -69,7 +69,7 @@ test-suite hinterface-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-  build-depends:       base >= 4.8 && < 5
+  build-depends:       base >= 4.9 && < 5
                      , hinterface
                      , hspec
                      , QuickCheck

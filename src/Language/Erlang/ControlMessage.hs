@@ -5,12 +5,14 @@ module Language.Erlang.ControlMessage ( ControlMessage(..) ) where
 
 import           Control.Applicative
 import           Control.Monad
+import           Control.Monad.Trans.Class (lift)
+import           Control.Monad.Trans.Maybe (MaybeT (..))
 import           Data.Binary
 import           Data.Binary.Get
 import           Data.Binary.Put
 import           Data.Maybe
 import           Language.Erlang.Term
-import           Prelude              hiding ( length )
+import           Prelude                   hiding (length)
 import           Test.QuickCheck
 import           Util.Binary
 
@@ -78,44 +80,45 @@ instance Binary ControlMessage where
         badControlMsg term = fail ("Bad control message: " ++ show term)
         get' = do
             term <- getTerm
-            res <- get'' term
+            res <- runMaybeT $ get'' term
             maybe (badControlMsg term) return res
           where
+            get'' :: Term -> MaybeT Get ControlMessage
             get'' term = getLINK
-                <|> getSEND
-                <|> getEXIT
-                <|> getUNLINK
-                <|> getNODE_LINK
-                <|> getREG_SEND
-                <|> getGROUP_LEADER
-                <|> getEXIT2
+                         <|> getSEND
+                         <|> getEXIT
+                         <|> getUNLINK
+                         <|> getNODE_LINK
+                         <|> getREG_SEND
+                         <|> getGROUP_LEADER
+                         <|> getEXIT2
               where
                 getLINK = do
-                    Just (_ :: TlinkTag, p2, p3) <- return $ fromTerm term
-                    return (Just (LINK p2 p3))
+                    (_ :: TlinkTag, p2, p3) <- fromTermA term
+                    return (LINK p2 p3)
                 getSEND = do
-                    Just (_ :: TsendTag, _ :: Term, p1) <- return $ fromTerm term
-                    message <- getTerm
-                    return (Just (SEND p1 message))
+                    (_ :: TsendTag, _ :: Term, p1) <- fromTermA term
+                    message <- lift getTerm
+                    return (SEND p1 message)
                 getEXIT = do
-                    Just (_ :: TexitTag, p2, p3, p4) <- return $ fromTerm term
-                    return (Just (EXIT p2 p3 p4))
+                    (_ :: TexitTag, p2, p3, p4) <- fromTermA term
+                    return (EXIT p2 p3 p4)
                 getUNLINK = do
-                    Just (_ :: TunlinkTag, p2, p3) <- return $ fromTerm term
-                    return (Just (UNLINK p2 p3))
+                    (_ :: TunlinkTag, p2, p3) <- fromTermA term
+                    return (UNLINK p2 p3)
                 getNODE_LINK = do
-                    Just (_ :: Tuple1 TnodeLinkTag) <- return $ fromTerm term
-                    return $ Just (NODE_LINK)
+                    (_ :: Tuple1 TnodeLinkTag) <- fromTermA term
+                    return NODE_LINK
                 getREG_SEND = do
-                    Just (_ :: TregSendTag, p2, _p3 :: Term, p4) <- return $ fromTerm term
-                    message <- getTerm
-                    return (Just (REG_SEND p2 p4 message))
+                    (_ :: TregSendTag, p2, _p3 :: Term, p4) <- fromTermA term
+                    message <- lift getTerm
+                    return (REG_SEND p2 p4 message)
                 getGROUP_LEADER = do
-                    Just (_ :: TgroupLeaderTag, p2, p3) <- return $ fromTerm term
-                    return $ Just (GROUP_LEADER p2 p3)
+                    (_ :: TgroupLeaderTag, p2, p3) <- fromTermA term
+                    return (GROUP_LEADER p2 p3)
                 getEXIT2 = do
-                    Just (_ :: Texit2Tag, p2, p3, p4) <- return $ fromTerm term
-                    return $ Just (EXIT2 p2 p3 p4)
+                    (_ :: Texit2Tag, p2, p3, p4) <- fromTermA term
+                    return (EXIT2 p2 p3 p4)
 
 --------------------------------------------------------------------------------
 pass_through :: Word8
