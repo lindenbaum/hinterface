@@ -9,9 +9,7 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Concurrent
 import           Control.Concurrent.STM
-
 import           Util.BufferedIOx
-
 import           Data.IOx
 import           Language.Erlang.NodeState
 import           Language.Erlang.Term

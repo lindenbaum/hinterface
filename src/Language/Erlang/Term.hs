@@ -304,7 +304,8 @@ integer = Integer
 data SInteger (n :: Nat) = SInteger
 
 instance (KnownNat n) => Show (SInteger n) where
-    show s = show (natVal s)
+  showsPrec d s =
+    showParen (d > 10) (showString "SInteger '" . showsPrec 11 (natVal s) . showChar '\'')
 
 instance forall (n :: Nat) . (KnownNat n) => FromTerm (SInteger n) where
     fromTerm (Integer n') = let sn = SInteger
@@ -328,6 +329,10 @@ atom = Atom
 
 -- | A static/constant atom.
 data SAtom (atom :: Symbol) = SAtom
+
+instance (KnownSymbol atom) => Show (SAtom atom) where
+  showsPrec d s =
+    showParen (d > 10) (showString "SAtom '" . showString (symbolVal s) . showChar '\'')
 
 instance forall (atom :: Symbol) . (KnownSymbol atom) => FromTerm (SAtom atom) where
     fromTerm (Atom atom') = if atom' == CS.pack (symbolVal (SAtom :: SAtom atom)) then Just SAtom else Nothing
