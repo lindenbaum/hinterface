@@ -37,7 +37,7 @@ import           Language.Erlang.Mailbox
 
 data LocalNode = LocalNode { handshakeData :: HandshakeData
                            , registration  :: Maybe NodeRegistration
-                           , nodeState     :: NodeState Term Term Mailbox Connection
+                           , nodeState     :: NodeState Pid Term Mailbox Connection
                            , acceptor      :: Maybe (Socket, ThreadId)
                            }
 
@@ -88,12 +88,12 @@ registerLocalNode localNode@LocalNode{handshakeData = hsn@HandshakeData{name = N
             remoteName <- doAccept (runPutBuffered sock') (runGetBuffered sock') handshakeData'
             newConnection sock' nodeState (atom remoteName)
 
-register :: LocalNode -> Term -> Term -> IOx ()
+register :: LocalNode -> Term -> Pid -> IOx ()
 register LocalNode{nodeState} name pid' = do
     mbox <- getMailboxForPid nodeState pid'
     putMailboxForName nodeState name mbox
 
-make_pid :: LocalNode -> IOx Term
+make_pid :: LocalNode -> IOx Pid
 make_pid LocalNode{handshakeData = HandshakeData{name = Name{n_nodeName}},registration,nodeState} = do
     (id, serial) <- new_pid nodeState
     return $ pid n_nodeName id serial (getCreation registration)
@@ -133,8 +133,8 @@ make_mailbox localNode@LocalNode{handshakeData = handshakeData@HandshakeData{nod
 getCreation :: (Maybe NodeRegistration) -> Word8
 getCreation = maybe 0 (fromIntegral . nr_creation)
 
-newMailbox :: NodeState Term Term Mailbox Connection
-           -> Term
+newMailbox :: NodeState Pid Term Mailbox Connection
+           -> Pid
            -> TQueue Term
            -> (BS.ByteString -> IOx Connection)
            -> Mailbox
@@ -155,7 +155,7 @@ newMailbox nodeState self queue connect =
             , deliverExit2 = \_fromPid _reason -> do
                 undefined
             , send = \toPid message -> do
-                let nodeName = node toPid
+                let nodeName = node $ toTerm toPid
                 connection <- getConnectionForNode nodeState nodeName `catchX` const (connect (atom_name nodeName))
                 sendControlMessage connection $ SEND toPid message
             , sendReg = \regName nodeName message -> do

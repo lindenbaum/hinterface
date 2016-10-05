@@ -24,7 +24,7 @@ data Connection = Connection { sendQueue :: TQueue ControlMessage
                              }
 
 --------------------------------------------------------------------------------
-newConnection :: (BufferedIOx s) => s -> NodeState Term Term Mailbox Connection -> Term -> IOx Connection
+newConnection :: (BufferedIOx s) => s -> NodeState Pid Term Mailbox Connection -> Term -> IOx Connection
 newConnection sock nodeState name = do
     (sendQueue, sendThread) <- (newSender sendLoop) sock
     recvThread <- (newReceiver recvLoop (sendQueue, nodeState, name)) sock
@@ -64,7 +64,7 @@ sendLoop sock sendQueue =
         controlMessage <- liftIO $ atomically $ readTQueue sendQueue
         runPutBuffered sock controlMessage
 
-recvLoop :: (BufferedIOx s) => s -> (TQueue ControlMessage, NodeState Term Term Mailbox Connection, Term) -> IOx ()
+recvLoop :: (BufferedIOx s) => s -> (TQueue ControlMessage, NodeState Pid Term Mailbox Connection, Term) -> IOx ()
 recvLoop sock (sendQueue, nodeState, name) = do
     forever (recv `catchX`
                  (\x -> do

@@ -3,6 +3,8 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -fno-warn-unused-binds #-}
+
 module Language.Erlang.Term
     ( -- * External Term Format
       Term()
@@ -13,6 +15,8 @@ module Language.Erlang.Term
     , FromTerm(..)
       -- ** Constructors
     , integer
+      -- *** Static numbers
+    , SInteger(..)
     , float
     , atom
       -- *** Static atoms
@@ -51,25 +55,22 @@ module Language.Erlang.Term
 import GHC.TypeLits
 import           Prelude               hiding ( id, length )
 import qualified Prelude               as P ( id )
-
 import           Control.Category      ( (>>>) )
 import           Control.Monad         as M ( replicateM )
-
 import           Data.String
 import           Data.ByteString       ( ByteString )
 import           Data.ByteString.Char8 ( unpack )
-import qualified Data.ByteString       as BS ( head, length, split, tail, unpack )
-import qualified Data.ByteString.Char8 as CS ( pack, unpack )
+import qualified Data.ByteString       as BS ( head, length, tail, unpack )
+import qualified Data.ByteString.Char8 as CS ( ByteString, pack, unpack )
 import           Data.Vector           ( (!), Vector, fromList, toList )
 import qualified Data.Vector           as V ( length, replicateM, tail )
 import qualified Data.List             as L ( length )
-
 import           Data.Binary
 import           Data.Binary.Put
 import           Data.Binary.Get       hiding ( getBytes )
-import           Data.Char
-
 import           Util.Binary
+import           Test.QuickCheck
+import           Data.Int
 
 --------------------------------------------------------------------------------
 data Term = Integer Integer
@@ -111,23 +112,23 @@ instance Ord Term where
         a `compare` a'
     (Atom _) `compare` _ = LT
 
-    (Reference node id creation) `compare` (Reference node' id' creation') =
-        (node, id, creation) `compare` (node', id', creation')
+    (Reference node' id creation) `compare` (Reference node'' id' creation') =
+        (node', id, creation) `compare` (node'', id', creation')
     (Reference _ _ _) `compare` _ =
         LT
 
-    (NewReference node creation ids) `compare` (NewReference node' creation' ids') =
-        (node, creation, ids) `compare` (node', creation', ids')
+    (NewReference node' creation ids) `compare` (NewReference node'' creation' ids') =
+        (node', creation, ids) `compare` (node'', creation', ids')
     (NewReference _ _ _) `compare` _ =
         LT
 
-    (Port node id creation) `compare` (Port node' id' creation') =
-        (node, id, creation) `compare` (node', id', creation')
+    (Port node' id creation) `compare` (Port node'' id' creation') =
+        (node', id, creation) `compare` (node'', id', creation')
     (Port _ _ _) `compare` _ =
         LT
 
-    (Pid node id serial creation) `compare` (Pid node' id' serial' creation') =
-        (node, id, serial, creation) `compare` (node', id', serial', creation')
+    (Pid node' id serial creation) `compare` (Pid node'' id' serial' creation') =
+        (node', id, serial, creation) `compare` (node'', id', serial', creation')
     (Pid _ _ _ _) `compare` _ =
         LT
 
@@ -171,7 +172,7 @@ instance Ord MapEntry where
 instance Show Term where
     show (Integer i) = show i
     show (Float d) = show d
-    show (Atom a) = unpack a
+    show (Atom a) = "'" ++ unpack a ++ "'"
     show (Reference nodeName id _creation) =
         "#Ref<" ++ unpack nodeName ++ "." ++ show id ++ ">"
     show (Port nodeName id _creation) =
@@ -220,6 +221,10 @@ class ToTerm a where
 class FromTerm a where
     fromTerm :: Term -> Maybe a
 
+instance FromTerm () where
+  fromTerm (Tuple ts) | V.length ts == 0 = Just ()
+  fromTerm _                            = Nothing
+
 instance (FromTerm a, FromTerm b) => FromTerm (a,b) where
   fromTerm (Tuple ts) | V.length ts == 2 = (,) <$> fromTerm (ts ! 0)
                                               <*> fromTerm (ts ! 1)
@@ -245,6 +250,9 @@ instance (FromTerm a, FromTerm b, FromTerm c,FromTerm d,FromTerm e) => FromTerm 
                                                  <*> fromTerm (ts ! 3)
                                                  <*> fromTerm (ts ! 4)
   fromTerm _                            = Nothing
+
+instance ToTerm () where
+  toTerm () = tuple []
 
 instance (ToTerm a, ToTerm b) => ToTerm (a,b) where
   toTerm (a,b) = tuple [toTerm a, toTerm b]
@@ -278,6 +286,24 @@ integer :: Integer -- ^ Int
         -> Term
 integer = Integer
 
+-- | A static/constant number.
+data SInteger (n :: Nat) = SInteger
+
+instance (KnownNat n) => Show (SInteger n) where
+  show s = show (natVal s)
+
+instance forall (n :: Nat) . (KnownNat n) => FromTerm (SInteger n) where
+  fromTerm (Integer n') =
+    let sn = SInteger
+        sn :: SInteger n
+    in if n' == natVal sn
+       then Just sn
+       else Nothing
+  fromTerm _ = Nothing
+
+instance forall (n :: Nat) . (KnownNat n) => ToTerm (SInteger n) where
+  toTerm = integer . natVal
+
 -- | Construct a float
 float :: Double -- ^ IEEE float
       -> Term
@@ -301,7 +327,6 @@ instance forall (atom :: Symbol) . (KnownSymbol atom) => FromTerm (SAtom atom) w
 instance forall (atom :: Symbol) . (KnownSymbol atom) => ToTerm (SAtom atom) where
   toTerm = atom . CS.pack . symbolVal
 
-
 -- reference
 -- | Construct a port
 port :: ByteString -- ^ Node name
@@ -310,10 +335,13 @@ port :: ByteString -- ^ Node name
      -> Term
 port = Port
 
-pid :: ByteString -> Word32 -> Word32 -> Word8 -> Term
-pid = Pid
+pid :: ByteString -> Word32 -> Word32 -> Word8 -> Pid
+pid = ((.) . (.) . (.) . (.)) MkPid Pid
 
-newtype Pid = MkPid Term deriving (ToTerm, FromTerm)
+newtype Pid = MkPid Term deriving (ToTerm, FromTerm, Eq, Ord)
+
+instance Show Pid where
+  show (MkPid p) = show p
 
 -- | Construct a tuple
 tuple :: [Term] -- ^ Elements
@@ -396,6 +424,7 @@ is_binary (Binary _) = True
 is_binary _ = False
 
 --------------------------------------------------------------------------------
+
 node :: Term -> Term
 node (Reference nodeName _id _creation) =
     atom nodeName
@@ -510,10 +539,10 @@ instance Binary Term where
         putWord8 binary_ext
         putLength16beByteString b
 
-    put (NewReference node creation ids) = do
+    put (NewReference node' creation ids) = do
         putWord8 new_reference_ext
         putWord16be $ fromIntegral (L.length ids)
-        putAtom node
+        putAtom node'
         putWord8 creation
         mapM_ putWord32be ids
     get = do
@@ -524,7 +553,7 @@ instance Binary Term where
             | tag == small_integer_ext =
                   getSmallInteger (Integer . fromIntegral)
             | tag == integer_ext =
-                  getInteger (Integer . fromIntegral)
+                  getInteger (Integer . toInteger . (fromIntegral :: Word32 -> Int32))
             | tag == atom_ext = getAtom Atom
             | tag == port_ext = getPort Port
             | tag == pid_ext = getPid Pid
@@ -551,10 +580,10 @@ instance Binary MapEntry where
         MapEntry <$> get <*> get
 
 --------------------------------------------------------------------------------
-putTerm :: Term -> Put
-putTerm term = do
+putTerm :: (Show t, ToTerm t) => t -> Put
+putTerm t = do
     putWord8 magicVersion
-    put term
+    put (toTerm t)
 
 putAtom :: ByteString -> Put
 putAtom a = do
@@ -706,3 +735,44 @@ new_float_ext = 70
 atom_utf8_ext = 118
 
 small_atom_utf8_ext = 119
+
+instance Arbitrary Term where
+  arbitrary = oneof [ atom
+                      <$> scale (`div` 2) arbitraryUnquotedAtom
+                    , tuple
+                      <$> scale (`div` 2) arbitrary
+                    , string
+                      <$> scale  (`div` 2) arbitraryUnquotedAtom
+                    , sized $ \ qcs ->
+                                if qcs > 1 then
+                                  improperList
+                                  <$> (getNonEmpty <$> scale (`div` 2) arbitrary)
+                                  <*> scale (`div` 2) arbitrary
+                                else
+                                  list
+                                  <$> scale (`div` 2) arbitrary
+                    , ref
+                      <$> scale smaller arbitraryUnquotedAtom
+                      <*> scale smaller arbitrary
+                      <*> scale smaller arbitrary
+                    , (toTerm :: Pid -> Term)
+                      <$> scale smaller arbitrary
+                    , float
+                      <$> scale smaller arbitrary
+                    , (toTerm :: Integer -> Term)
+                      <$> scale smaller arbitrary
+                    ]
+
+smaller :: (Eq a, Num a) => a -> a
+smaller 0 = 0
+smaller n = n - 1
+
+arbitraryUnquotedAtom :: Gen CS.ByteString
+arbitraryUnquotedAtom =
+  CS.pack <$> (listOf1 (elements (['a'..'z'] ++ ['_'] ++ ['0' .. '9'])))
+
+instance Arbitrary Pid where
+    arbitrary =
+      pid <$> scale smaller arbitraryUnquotedAtom <*> scale smaller arbitrary
+          <*> scale smaller arbitrary
+          <*> scale smaller arbitrary

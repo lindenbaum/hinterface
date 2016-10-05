@@ -1,23 +1,28 @@
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Language.Erlang.ControlMessage ( ControlMessage(..) ) where
 
-import           Prelude              hiding ( length )
+import           Control.Applicative
+import           Control.Monad
 import           Data.Binary
-import           Data.Binary.Put
 import           Data.Binary.Get
-
-import           Util.Binary
+import           Data.Binary.Put
+import           Data.Maybe
 import           Language.Erlang.Term
+import           Prelude              hiding (length)
+import           Test.QuickCheck
+import           Util.Binary
 
 --------------------------------------------------------------------------------
 data ControlMessage = TICK
-                    | LINK Term Term          -- FromPid ToPid
-                    | SEND Term Term          -- ToPid Message
-                    | EXIT Term Term Term     -- FromPid ToPid Reason
-                    | UNLINK Term Term        -- FromPid ToPid
+                    | LINK Pid Pid          -- FromPid ToPid
+                    | SEND Pid Term          -- ToPid Message
+                    | EXIT Pid Pid Term     -- FromPid ToPid Reason
+                    | UNLINK Pid Pid        -- FromPid ToPid
                     | NODE_LINK               --
-                    | REG_SEND Term Term Term -- FromPid ToName Message
-                    | GROUP_LEADER Term Term  -- FromPid ToPid
-                    | EXIT2 Term Term Term    -- FromPid ToPid Reason
+                    | REG_SEND Pid Term Term -- FromPid ToName Message
+                    | GROUP_LEADER Pid Pid  -- FromPid ToPid
+                    | EXIT2 Pid Pid Term    -- FromPid ToPid Reason
     deriving (Eq, Show)
 
 instance Binary ControlMessage where
@@ -26,31 +31,33 @@ instance Binary ControlMessage where
         putWord8 pass_through
         put' controlMessage
       where
+        put' TICK = fail "Unreachable code"
+
         put' (LINK fromPid toPid) = do
-            putTerm $ tuple [ linkTag, fromPid, toPid ]
+            putTerm (linkTag, fromPid, toPid)
 
         put' (SEND toPid message) = do
-            putTerm $ tuple [ sendTag, unused, toPid ]
+            putTerm (sendTag, unused, toPid)
             putTerm message
 
         put' (EXIT fromPid toPid reason) = do
-            putTerm $ tuple [ exitTag, fromPid, toPid, reason ]
+            putTerm (exitTag, fromPid, toPid, reason)
 
         put' (UNLINK fromPid toPid) = do
-            putTerm $ tuple [ unlinkTag, fromPid, toPid ]
+            putTerm ( unlinkTag, fromPid, toPid )
 
         put' NODE_LINK = do
-            putTerm $ tuple [ nodeLinkTag ]
+            putTerm ( nodeLinkTag )
 
         put' (REG_SEND fromPid toName message) = do
-            putTerm $ tuple [ regSendTag, fromPid, unused, toName ]
+            putTerm ( regSendTag, fromPid, unused, toName )
             putTerm message
 
         put' (GROUP_LEADER fromPid toPid) = do
-            putTerm $ tuple [ groupLeaderTag, fromPid, toPid ]
+            putTerm ( groupLeaderTag, fromPid, toPid )
 
         put' (EXIT2 fromPid toPid reason) = do
-            putTerm $ tuple [ exit2Tag, fromPid, toPid, reason ]
+            putTerm ( exit2Tag, fromPid, toPid, reason )
     get = do
         expectedLen <- getWord32be
         if expectedLen == 0
@@ -67,56 +74,95 @@ instance Binary ControlMessage where
                     else do
                         fail "Bad control message length"
       where
-        get' = do
-            term <- getTerm
-            if is_tuple term
-                then do
-                    get'' term
-                else do
-                    fail $ "Bad control message: " ++ show term
-          where
-            get'' term
-                | length term == 3 && element 1 term == linkTag = do
-                      return (LINK (element 2 term) (element 3 term))
-                | length term == 3 && element 1 term == sendTag = do
-                      message <- getTerm
-                      return (SEND (element 3 term) message)
-                | length term == 4 && element 1 term == exitTag = do
-                      return (EXIT (element 2 term) (element 3 term) (element 4 term))
-                | length term == 3 && element 1 term == unlinkTag = do
-                      return (UNLINK (element 2 term) (element 3 term))
-                | length term == 1 && element 1 term == nodeLinkTag = do
-                      return NODE_LINK
-                | length term == 4 && element 1 term == regSendTag = do
-                      message <- getTerm
-                      return (REG_SEND (element 2 term) (element 4 term) message)
-                | length term == 3 && element 1 term == groupLeaderTag = do
-                      return (GROUP_LEADER (element 2 term) (element 3 term))
-                | length term == 4 && element 1 term == exit2Tag = do
-                      return (EXIT2 (element 2 term) (element 3 term) (element 4 term))
-                | otherwise = do
-                      fail $ "Bad control message: " ++ show term
+        badControlMsg term = fail ("Bad control message: " ++ show term)
+        get' =
+          do term <- getTerm
+             res <- get'' term
+             maybe (badControlMsg term) return res
+         where
+           get'' term =      getLINK
+                         <|> getSEND
+                         <|> getEXIT
+                         <|> getUNLINK
+                         <|> getNODE_LINK
+                         <|> getREG_SEND
+                         <|> getGROUP_LEADER
+                         <|> getEXIT2
+             where
+               getLINK =
+                 do Just (_ :: TlinkTag,p2, p3) <- return $ fromTerm term
+                    return (Just (LINK p2 p3))
+               getSEND =
+                 do Just (_ :: TsendTag, _ :: Term, p1) <- return $ fromTerm term
+                    message <- getTerm
+                    return (Just (SEND p1 message))
+               getEXIT =
+                 do Just (_ :: TexitTag,p2, p3, p4) <- return $ fromTerm term
+                    return (Just (EXIT p2 p3 p4))
+               getUNLINK =
+                 do Just (_ :: TunlinkTag,p2, p3) <- return $ fromTerm term
+                    return (Just (UNLINK p2 p3))
+               getNODE_LINK =
+                 do Just (_ :: TnodeLinkTag) <- return $ fromTerm term
+                    return $ Just NODE_LINK
+               getREG_SEND =
+                 do Just (_ :: TregSendTag, p2, _p3 :: Term, p4) <- return $ fromTerm term
+                    message <- getTerm
+                    return (Just (REG_SEND p2 p4 message))
+               getGROUP_LEADER =
+                 do Just (_ :: TgroupLeaderTag,p2, p3) <- return $ fromTerm term
+                    return $ Just (GROUP_LEADER p2 p3)
+               getEXIT2 =
+                 do Just (_ :: Texit2Tag,p2, p3, p4) <- return $ fromTerm term
+                    return $ Just (EXIT2 p2 p3 p4)
 
 --------------------------------------------------------------------------------
 pass_through :: Word8
 pass_through = 112
 
-linkTag, sendTag, exitTag, unlinkTag, nodeLinkTag, regSendTag, groupLeaderTag, exit2Tag :: Term
-linkTag = integer 1
+type TlinkTag = SInteger 1
+linkTag :: TlinkTag
+linkTag = SInteger
 
-sendTag = integer 2
+type TsendTag = SInteger 2
+sendTag :: TsendTag
+sendTag = SInteger
 
-exitTag = integer 3
+type TexitTag = SInteger 3
+exitTag :: TexitTag
+exitTag = SInteger
 
-unlinkTag = integer 4
+type TunlinkTag = SInteger 4
+unlinkTag :: TunlinkTag
+unlinkTag = SInteger
 
-nodeLinkTag = integer 5
+type TnodeLinkTag = SInteger 5
+nodeLinkTag :: TnodeLinkTag
+nodeLinkTag = SInteger
 
-regSendTag = integer 6
+type TregSendTag = SInteger 6
+regSendTag :: TregSendTag
+regSendTag = SInteger
 
-groupLeaderTag = integer 7
+type TgroupLeaderTag = SInteger 7
+groupLeaderTag :: TgroupLeaderTag
+groupLeaderTag = SInteger
 
-exit2Tag = integer 8
+type Texit2Tag = SInteger 8
+exit2Tag :: Texit2Tag
+exit2Tag = SInteger
 
 unused :: Term
 unused = atom ""
+
+instance Arbitrary ControlMessage where
+    arbitrary = oneof [ pure TICK
+                      , LINK <$> arbitrary <*> arbitrary
+                      , SEND <$> arbitrary <*> arbitrary
+                      , EXIT <$> arbitrary <*> arbitrary <*> arbitrary
+                      , UNLINK <$> arbitrary <*> arbitrary
+                      , pure NODE_LINK
+                      , REG_SEND <$> arbitrary <*> arbitrary <*> arbitrary
+                      , GROUP_LEADER <$> arbitrary <*> arbitrary
+                      , EXIT2 <$> arbitrary <*> arbitrary <*> arbitrary
+                      ]

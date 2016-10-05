@@ -3,16 +3,16 @@
 --
 module Main ( main ) where
 
-import           Prelude                   hiding ( length )
+import           Prelude                   hiding (length)
 
-import           Control.Monad.IO.Class    ( liftIO )
+import           Control.Monad.IO.Class    (liftIO)
 
 import           Data.IOx
 
 import           Language.Erlang.Epmd
 import           Language.Erlang.LocalNode
-import           Language.Erlang.Term
 import           Language.Erlang.Mailbox
+import           Language.Erlang.Term
 
 import           Person
 
@@ -33,17 +33,17 @@ mainX = do
 
     myPort <- make_port localNode
     myRef <- make_ref localNode
-    let message = tuple [ self
-                        , myRef
-                        , myPort
-                        , tuple [ float 2.18, tuple [], list [], list [ atom "a", atom "b", atom "c" ] ]
-                        , string "hello!"
-                        ]
+    let message = ( self
+                  , myRef
+                  , myPort
+                  , (float 2.18, (), list [], list [ atom "a", atom "b", atom "c" ])
+                  , string "hello!"
+                  )
     liftIO $ putStr "Message: "
     liftIO $ print message
     liftIO $ putStrLn ""
 
-    sendReg mailbox "echo" "erl@localhost.localdomain" message
+    sendReg mailbox "echo" "erl@localhost.localdomain" (toTerm message)
 
 
     reply <- receive mailbox
@@ -51,7 +51,7 @@ mainX = do
     liftIO $ print reply
     liftIO $ putStrLn ""
 
-    sendReg mailbox "echo" "erl@localhost.localdomain" (tuple [ self, (toTerm (Person "Timo" 46)) ])
+    sendReg mailbox "echo" "erl@localhost.localdomain" (toTerm (self, Person "Timo" 46))
     person <- receive mailbox
     liftIO $ print person
     case fromTerm person :: Maybe Person of
@@ -70,13 +70,9 @@ mainX = do
 loopX :: Mailbox -> IOx ()
 loopX mailbox = do
     msg <- receive mailbox
-    case match_tuple msg of
-        Just [ remotePid, value ] -> do
-            case to_integer value of
-                Just i -> do
-                    send mailbox remotePid (integer (i + 1))
-                    loopX mailbox
-                _ -> do
-                    return ()
+    case fromTerm msg of
+        Just (remotePid, i) ->
+          do send mailbox remotePid (toTerm (integer (i + 1)))
+             loopX mailbox
         _ -> do
             return ()
