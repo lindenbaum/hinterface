@@ -1,8 +1,8 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE KindSignatures             #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
 
 module Language.Erlang.Term
@@ -25,6 +25,7 @@ module Language.Erlang.Term
     , pid
     , Pid(..)
     , tuple
+    , Tuple1(..)
     , string
     , list
     , improperList
@@ -52,7 +53,7 @@ module Language.Erlang.Term
     , match_tuple
     ) where
 
-import GHC.TypeLits
+import           GHC.TypeLits
 import           Prelude               hiding ( id, length )
 import qualified Prelude               as P ( id )
 import           Control.Category      ( (>>>) )
@@ -209,10 +210,10 @@ instance IsString Term where
     fromString = atom . CS.pack
 
 instance FromTerm Term where
-  fromTerm = Just
+    fromTerm = Just
 
 instance ToTerm Term where
-  toTerm = P.id
+    toTerm = P.id
 
 --------------------------------------------------------------------------------
 class ToTerm a where
@@ -222,63 +223,68 @@ class FromTerm a where
     fromTerm :: Term -> Maybe a
 
 instance FromTerm () where
-  fromTerm (Tuple ts) | V.length ts == 0 = Just ()
-  fromTerm _                            = Nothing
+    fromTerm (Tuple ts) | V.length ts == 0 = Just ()
+    fromTerm _ = Nothing
 
-instance (FromTerm a, FromTerm b) => FromTerm (a,b) where
-  fromTerm (Tuple ts) | V.length ts == 2 = (,) <$> fromTerm (ts ! 0)
-                                              <*> fromTerm (ts ! 1)
-  fromTerm _                            = Nothing
+instance (FromTerm a) => FromTerm (Tuple1 a) where
+    fromTerm (Tuple ts) | V.length ts == 1 = Tuple1 <$> fromTerm (ts ! 0)
+    fromTerm _ = Nothing
 
-instance (FromTerm a, FromTerm b, FromTerm c) => FromTerm (a,b,c) where
-  fromTerm (Tuple ts) | V.length ts == 3 = (,,) <$> fromTerm (ts ! 0)
-                                               <*> fromTerm (ts ! 1)
-                                               <*> fromTerm (ts ! 2)
-  fromTerm _                            = Nothing
+instance (FromTerm a, FromTerm b) => FromTerm (a, b) where
+    fromTerm (Tuple ts) | V.length ts == 2 = (,) <$> fromTerm (ts ! 0) <*> fromTerm (ts ! 1)
+    fromTerm _ = Nothing
 
-instance (FromTerm a, FromTerm b, FromTerm c,FromTerm d) => FromTerm (a,b,c,d) where
-  fromTerm (Tuple ts) | V.length ts == 4 = (,,,) <$> fromTerm (ts ! 0)
-                                                <*> fromTerm (ts ! 1)
-                                                <*> fromTerm (ts ! 2)
-                                                <*> fromTerm (ts ! 3)
-  fromTerm _                            = Nothing
+instance (FromTerm a, FromTerm b, FromTerm c) => FromTerm (a, b, c) where
+    fromTerm (Tuple ts) | V.length ts == 3 = (,,) <$> fromTerm (ts ! 0) <*> fromTerm (ts ! 1) <*> fromTerm (ts ! 2)
+    fromTerm _ = Nothing
 
-instance (FromTerm a, FromTerm b, FromTerm c,FromTerm d,FromTerm e) => FromTerm (a,b,c,d,e) where
-  fromTerm (Tuple ts) | V.length ts == 5 = (,,,,) <$> fromTerm (ts ! 0)
-                                                 <*> fromTerm (ts ! 1)
-                                                 <*> fromTerm (ts ! 2)
-                                                 <*> fromTerm (ts ! 3)
-                                                 <*> fromTerm (ts ! 4)
-  fromTerm _                            = Nothing
+instance (FromTerm a, FromTerm b, FromTerm c, FromTerm d) => FromTerm (a, b, c, d) where
+    fromTerm (Tuple ts) | V.length ts == 4 = (,,,) <$> fromTerm (ts ! 0)
+                                                   <*> fromTerm (ts ! 1)
+                                                   <*> fromTerm (ts ! 2)
+                                                   <*> fromTerm (ts ! 3)
+    fromTerm _ = Nothing
+
+instance (FromTerm a, FromTerm b, FromTerm c, FromTerm d, FromTerm e) => FromTerm (a, b, c, d, e) where
+    fromTerm (Tuple ts) | V.length ts == 5 = (,,,,) <$> fromTerm (ts ! 0)
+                                                    <*> fromTerm (ts ! 1)
+                                                    <*> fromTerm (ts ! 2)
+                                                    <*> fromTerm (ts ! 3)
+                                                    <*> fromTerm (ts ! 4)
+    fromTerm _ = Nothing
 
 instance ToTerm () where
-  toTerm () = tuple []
+    toTerm () = tuple []
 
-instance (ToTerm a, ToTerm b) => ToTerm (a,b) where
-  toTerm (a,b) = tuple [toTerm a, toTerm b]
+instance (ToTerm a) => ToTerm (Tuple1 a) where
+    toTerm (Tuple1 a) = tuple [ toTerm a ]
 
-instance (ToTerm a, ToTerm b, ToTerm c) => ToTerm (a,b,c) where
-  toTerm (a,b,c) = tuple [toTerm a, toTerm b, toTerm c]
+instance (ToTerm a, ToTerm b) => ToTerm (a, b) where
+    toTerm (a, b) = tuple [ toTerm a, toTerm b ]
 
-instance (ToTerm a, ToTerm b, ToTerm c, ToTerm d) => ToTerm (a,b,c,d) where
-  toTerm (a,b,c,d) = tuple [toTerm a, toTerm b, toTerm c, toTerm d]
+instance (ToTerm a, ToTerm b, ToTerm c) => ToTerm (a, b, c) where
+    toTerm (a, b, c) = tuple [ toTerm a, toTerm b, toTerm c ]
 
-instance (ToTerm a, ToTerm b, ToTerm c, ToTerm d, ToTerm e) => ToTerm (a,b,c,d,e) where
-  toTerm (a,b,c,d,e) = tuple [toTerm a, toTerm b, toTerm c, toTerm d, toTerm e]
+instance (ToTerm a, ToTerm b, ToTerm c, ToTerm d) => ToTerm (a, b, c, d) where
+    toTerm (a, b, c, d) = tuple [ toTerm a, toTerm b, toTerm c, toTerm d ]
+
+instance (ToTerm a, ToTerm b, ToTerm c, ToTerm d, ToTerm e) => ToTerm (a, b, c, d, e) where
+    toTerm (a, b, c, d, e) =
+        tuple [ toTerm a, toTerm b, toTerm c, toTerm d, toTerm e ]
 
 instance FromTerm Integer where
-  fromTerm (Integer i) = Just i
-  fromTerm _           = Nothing
+    fromTerm (Integer i) = Just i
+    fromTerm _ = Nothing
 
 instance ToTerm Integer where
-  toTerm = Integer
+    toTerm = Integer
 
 instance FromTerm String where
-  fromTerm (String s) = Just (CS.unpack s)
-  fromTerm _          = Nothing
+    fromTerm (String s) = Just (CS.unpack s)
+    fromTerm _ = Nothing
 
 instance ToTerm String where
-  toTerm = String . CS.pack
+    toTerm = String . CS.pack
 
 --------------------------------------------------------------------------------
 -- | Construct an integer
@@ -290,19 +296,17 @@ integer = Integer
 data SInteger (n :: Nat) = SInteger
 
 instance (KnownNat n) => Show (SInteger n) where
-  show s = show (natVal s)
+    show s = show (natVal s)
 
 instance forall (n :: Nat) . (KnownNat n) => FromTerm (SInteger n) where
-  fromTerm (Integer n') =
-    let sn = SInteger
-        sn :: SInteger n
-    in if n' == natVal sn
-       then Just sn
-       else Nothing
-  fromTerm _ = Nothing
+    fromTerm (Integer n') = let sn = SInteger
+                                sn :: SInteger n
+                            in
+                                if n' == natVal sn then Just sn else Nothing
+    fromTerm _ = Nothing
 
 instance forall (n :: Nat) . (KnownNat n) => ToTerm (SInteger n) where
-  toTerm = integer . natVal
+    toTerm = integer . natVal
 
 -- | Construct a float
 float :: Double -- ^ IEEE float
@@ -318,14 +322,11 @@ atom = Atom
 data SAtom (atom :: Symbol) = SAtom
 
 instance forall (atom :: Symbol) . (KnownSymbol atom) => FromTerm (SAtom atom) where
-  fromTerm (Atom atom') =
-    if atom' == CS.pack (symbolVal (SAtom :: SAtom atom))
-    then Just SAtom
-    else Nothing
-  fromTerm _ = Nothing
+    fromTerm (Atom atom') = if atom' == CS.pack (symbolVal (SAtom :: SAtom atom)) then Just SAtom else Nothing
+    fromTerm _ = Nothing
 
 instance forall (atom :: Symbol) . (KnownSymbol atom) => ToTerm (SAtom atom) where
-  toTerm = atom . CS.pack . symbolVal
+    toTerm = atom . CS.pack . symbolVal
 
 -- reference
 -- | Construct a port
@@ -335,18 +336,29 @@ port :: ByteString -- ^ Node name
      -> Term
 port = Port
 
-pid :: ByteString -> Word32 -> Word32 -> Word8 -> Pid
+pid :: ByteString -- ^ Node name
+    -> Word32     -- ^ ID
+    -> Word32     -- ^ Serial
+    -> Word8      -- ^ Creation
+    -> Pid
 pid = ((.) . (.) . (.) . (.)) MkPid Pid
 
-newtype Pid = MkPid Term deriving (ToTerm, FromTerm, Eq, Ord)
+newtype Pid = MkPid Term
+    deriving (ToTerm, FromTerm, Eq, Ord)
 
 instance Show Pid where
-  show (MkPid p) = show p
+    show (MkPid p) = show p
 
 -- | Construct a tuple
 tuple :: [Term] -- ^ Elements
       -> Term
 tuple = Tuple . fromList
+
+newtype Tuple1 a = Tuple1 a
+    deriving (Eq, Ord)
+
+instance (Show a) => Show (Tuple1 a) where
+  show (Tuple1 a) = "{" ++ show a ++ "}"
 
 -- map
 -- | Construct a list
@@ -424,7 +436,6 @@ is_binary (Binary _) = True
 is_binary _ = False
 
 --------------------------------------------------------------------------------
-
 node :: Term -> Term
 node (Reference nodeName _id _creation) =
     atom nodeName
@@ -552,8 +563,7 @@ instance Binary Term where
         get' tag
             | tag == small_integer_ext =
                   getSmallInteger (Integer . fromIntegral)
-            | tag == integer_ext =
-                  getInteger (Integer . toInteger . (fromIntegral :: Word32 -> Int32))
+            | tag == integer_ext = getInteger (Integer . toInteger . (fromIntegral :: Word32 -> Int32))
             | tag == atom_ext = getAtom Atom
             | tag == port_ext = getPort Port
             | tag == pid_ext = getPid Pid
@@ -737,42 +747,31 @@ atom_utf8_ext = 118
 small_atom_utf8_ext = 119
 
 instance Arbitrary Term where
-  arbitrary = oneof [ atom
-                      <$> scale (`div` 2) arbitraryUnquotedAtom
-                    , tuple
-                      <$> scale (`div` 2) arbitrary
-                    , string
-                      <$> scale  (`div` 2) arbitraryUnquotedAtom
-                    , sized $ \ qcs ->
-                                if qcs > 1 then
-                                  improperList
-                                  <$> (getNonEmpty <$> scale (`div` 2) arbitrary)
-                                  <*> scale (`div` 2) arbitrary
-                                else
-                                  list
-                                  <$> scale (`div` 2) arbitrary
-                    , ref
-                      <$> scale smaller arbitraryUnquotedAtom
-                      <*> scale smaller arbitrary
-                      <*> scale smaller arbitrary
-                    , (toTerm :: Pid -> Term)
-                      <$> scale smaller arbitrary
-                    , float
-                      <$> scale smaller arbitrary
-                    , (toTerm :: Integer -> Term)
-                      <$> scale smaller arbitrary
-                    ]
+    arbitrary = oneof [ atom <$> scale (`div` 2) arbitraryUnquotedAtom
+                      , tuple <$> scale (`div` 2) arbitrary
+                      , string <$> scale (`div` 2) arbitraryUnquotedAtom
+                      , sized $
+                          \qcs -> if qcs > 1
+                                  then improperList <$> (getNonEmpty <$> scale (`div` 2) arbitrary)
+                                                    <*> scale (`div` 2) arbitrary
+                                  else list <$> scale (`div` 2) arbitrary
+                      , ref <$> scale smaller arbitraryUnquotedAtom
+                            <*> scale smaller arbitrary
+                            <*> scale smaller arbitrary
+                      , (toTerm :: Pid -> Term) <$> scale smaller arbitrary
+                      , float <$> scale smaller arbitrary
+                      , (toTerm :: Integer -> Term) <$> scale smaller arbitrary
+                      ]
 
 smaller :: (Eq a, Num a) => a -> a
 smaller 0 = 0
 smaller n = n - 1
 
 arbitraryUnquotedAtom :: Gen CS.ByteString
-arbitraryUnquotedAtom =
-  CS.pack <$> (listOf1 (elements (['a'..'z'] ++ ['_'] ++ ['0' .. '9'])))
+arbitraryUnquotedAtom = CS.pack <$> (listOf1 (elements (['a' .. 'z'] ++ [ '_' ] ++ ['0' .. '9'])))
 
 instance Arbitrary Pid where
-    arbitrary =
-      pid <$> scale smaller arbitraryUnquotedAtom <*> scale smaller arbitrary
-          <*> scale smaller arbitrary
-          <*> scale smaller arbitrary
+    arbitrary = pid <$> scale smaller arbitraryUnquotedAtom
+                    <*> scale smaller arbitrary
+                    <*> scale smaller arbitrary
+                    <*> scale smaller arbitrary

@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+
 module Language.Erlang.ControlMessage ( ControlMessage(..) ) where
 
 import           Control.Applicative
@@ -9,20 +10,20 @@ import           Data.Binary.Get
 import           Data.Binary.Put
 import           Data.Maybe
 import           Language.Erlang.Term
-import           Prelude              hiding (length)
+import           Prelude              hiding ( length )
 import           Test.QuickCheck
 import           Util.Binary
 
 --------------------------------------------------------------------------------
 data ControlMessage = TICK
-                    | LINK Pid Pid          -- FromPid ToPid
+                    | LINK Pid Pid           -- FromPid ToPid
                     | SEND Pid Term          -- ToPid Message
-                    | EXIT Pid Pid Term     -- FromPid ToPid Reason
-                    | UNLINK Pid Pid        -- FromPid ToPid
-                    | NODE_LINK               --
+                    | EXIT Pid Pid Term      -- FromPid ToPid Reason
+                    | UNLINK Pid Pid         -- FromPid ToPid
+                    | NODE_LINK              --
                     | REG_SEND Pid Term Term -- FromPid ToName Message
-                    | GROUP_LEADER Pid Pid  -- FromPid ToPid
-                    | EXIT2 Pid Pid Term    -- FromPid ToPid Reason
+                    | GROUP_LEADER Pid Pid   -- FromPid ToPid
+                    | EXIT2 Pid Pid Term     -- FromPid ToPid Reason
     deriving (Eq, Show)
 
 instance Binary ControlMessage where
@@ -44,20 +45,20 @@ instance Binary ControlMessage where
             putTerm (exitTag, fromPid, toPid, reason)
 
         put' (UNLINK fromPid toPid) = do
-            putTerm ( unlinkTag, fromPid, toPid )
+            putTerm (unlinkTag, fromPid, toPid)
 
         put' NODE_LINK = do
-            putTerm ( nodeLinkTag )
+            putTerm (Tuple1 nodeLinkTag)
 
         put' (REG_SEND fromPid toName message) = do
-            putTerm ( regSendTag, fromPid, unused, toName )
+            putTerm (regSendTag, fromPid, unused, toName)
             putTerm message
 
         put' (GROUP_LEADER fromPid toPid) = do
-            putTerm ( groupLeaderTag, fromPid, toPid )
+            putTerm (groupLeaderTag, fromPid, toPid)
 
         put' (EXIT2 fromPid toPid reason) = do
-            putTerm ( exit2Tag, fromPid, toPid, reason )
+            putTerm (exit2Tag, fromPid, toPid, reason)
     get = do
         expectedLen <- getWord32be
         if expectedLen == 0
@@ -75,45 +76,45 @@ instance Binary ControlMessage where
                         fail "Bad control message length"
       where
         badControlMsg term = fail ("Bad control message: " ++ show term)
-        get' =
-          do term <- getTerm
-             res <- get'' term
-             maybe (badControlMsg term) return res
-         where
-           get'' term =      getLINK
-                         <|> getSEND
-                         <|> getEXIT
-                         <|> getUNLINK
-                         <|> getNODE_LINK
-                         <|> getREG_SEND
-                         <|> getGROUP_LEADER
-                         <|> getEXIT2
-             where
-               getLINK =
-                 do Just (_ :: TlinkTag,p2, p3) <- return $ fromTerm term
+        get' = do
+            term <- getTerm
+            res <- get'' term
+            maybe (badControlMsg term) return res
+          where
+            get'' term = getLINK
+                <|> getSEND
+                <|> getEXIT
+                <|> getUNLINK
+                <|> getNODE_LINK
+                <|> getREG_SEND
+                <|> getGROUP_LEADER
+                <|> getEXIT2
+              where
+                getLINK = do
+                    Just (_ :: TlinkTag, p2, p3) <- return $ fromTerm term
                     return (Just (LINK p2 p3))
-               getSEND =
-                 do Just (_ :: TsendTag, _ :: Term, p1) <- return $ fromTerm term
+                getSEND = do
+                    Just (_ :: TsendTag, _ :: Term, p1) <- return $ fromTerm term
                     message <- getTerm
                     return (Just (SEND p1 message))
-               getEXIT =
-                 do Just (_ :: TexitTag,p2, p3, p4) <- return $ fromTerm term
+                getEXIT = do
+                    Just (_ :: TexitTag, p2, p3, p4) <- return $ fromTerm term
                     return (Just (EXIT p2 p3 p4))
-               getUNLINK =
-                 do Just (_ :: TunlinkTag,p2, p3) <- return $ fromTerm term
+                getUNLINK = do
+                    Just (_ :: TunlinkTag, p2, p3) <- return $ fromTerm term
                     return (Just (UNLINK p2 p3))
-               getNODE_LINK =
-                 do Just (_ :: TnodeLinkTag) <- return $ fromTerm term
-                    return $ Just NODE_LINK
-               getREG_SEND =
-                 do Just (_ :: TregSendTag, p2, _p3 :: Term, p4) <- return $ fromTerm term
+                getNODE_LINK = do
+                    Just (_ :: Tuple1 TnodeLinkTag) <- return $ fromTerm term
+                    return $ Just (NODE_LINK)
+                getREG_SEND = do
+                    Just (_ :: TregSendTag, p2, _p3 :: Term, p4) <- return $ fromTerm term
                     message <- getTerm
                     return (Just (REG_SEND p2 p4 message))
-               getGROUP_LEADER =
-                 do Just (_ :: TgroupLeaderTag,p2, p3) <- return $ fromTerm term
+                getGROUP_LEADER = do
+                    Just (_ :: TgroupLeaderTag, p2, p3) <- return $ fromTerm term
                     return $ Just (GROUP_LEADER p2 p3)
-               getEXIT2 =
-                 do Just (_ :: Texit2Tag,p2, p3, p4) <- return $ fromTerm term
+                getEXIT2 = do
+                    Just (_ :: Texit2Tag, p2, p3, p4) <- return $ fromTerm term
                     return $ Just (EXIT2 p2 p3 p4)
 
 --------------------------------------------------------------------------------
@@ -121,34 +122,42 @@ pass_through :: Word8
 pass_through = 112
 
 type TlinkTag = SInteger 1
+
 linkTag :: TlinkTag
 linkTag = SInteger
 
 type TsendTag = SInteger 2
+
 sendTag :: TsendTag
 sendTag = SInteger
 
 type TexitTag = SInteger 3
+
 exitTag :: TexitTag
 exitTag = SInteger
 
 type TunlinkTag = SInteger 4
+
 unlinkTag :: TunlinkTag
 unlinkTag = SInteger
 
 type TnodeLinkTag = SInteger 5
+
 nodeLinkTag :: TnodeLinkTag
 nodeLinkTag = SInteger
 
 type TregSendTag = SInteger 6
+
 regSendTag :: TregSendTag
 regSendTag = SInteger
 
 type TgroupLeaderTag = SInteger 7
+
 groupLeaderTag :: TgroupLeaderTag
 groupLeaderTag = SInteger
 
 type Texit2Tag = SInteger 8
+
 exit2Tag :: Texit2Tag
 exit2Tag = SInteger
 
