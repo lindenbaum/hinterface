@@ -1,3 +1,4 @@
+{-# LANGUAGE Strict #-}
 module Language.Erlang.NodeData
     ( DistributionVersion(..)
     , matchDistributionVersion

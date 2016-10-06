@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE Strict              #-}
 
 module Language.Erlang.ControlMessage ( ControlMessage(..) ) where
 

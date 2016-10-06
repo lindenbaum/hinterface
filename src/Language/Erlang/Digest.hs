@@ -1,22 +1,21 @@
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE Strict         #-}
 
 module Language.Erlang.Digest
     ( genChallenge
     , genDigest
     ) where
 
+import           "cryptonite" Crypto.Hash           (MD5 (MD5), hashFinalize,
+                                                     hashInitWith, hashUpdate)
+import           Data.ByteArray        (convert)
 import qualified Data.ByteString       as BS
 import qualified Data.ByteString.Char8 as CS
 import           Data.Word
-import           Crypto.Hash           ( MD5(MD5), hashFinalize, hashInitWith, hashUpdate )
-import           System.Random         ( randomIO )
-import           Data.ByteArray        ( convert )
+import           System.Random         (randomIO)
 
-import           Data.IOx
-
-genChallenge :: IOx Word32
-genChallenge = toIOx $ do
-    randomIO
+genChallenge :: IO Word32
+genChallenge = randomIO
 
 genDigest :: Word32 -> BS.ByteString -> BS.ByteString
 genDigest challenge cookie =

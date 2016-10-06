@@ -1,3 +1,4 @@
+{-# LANGUAGE Strict #-}
 module Language.Erlang.Connection
     ( Connection()
     , newConnection
@@ -6,11 +7,10 @@ module Language.Erlang.Connection
     ) where
 
 import           Control.Monad
-import           Control.Monad.IO.Class
 import           Control.Concurrent
 import           Control.Concurrent.STM
 import           Util.BufferedIOx
-import           Data.IOx
+import           Util.IOExtra
 import           Language.Erlang.NodeState
 import           Language.Erlang.Term
 import           Language.Erlang.ControlMessage
@@ -18,11 +18,11 @@ import           Language.Erlang.Mailbox
 
 --------------------------------------------------------------------------------
 data Connection = Connection { sendQueue :: TQueue ControlMessage
-                             , onClose   :: IOx ()
+                             , onClose   :: IO ()
                              }
 
 --------------------------------------------------------------------------------
-newConnection :: (BufferedIOx s) => s -> NodeState Pid Term Mailbox Connection -> Term -> IOx Connection
+newConnection :: (BufferedIOx s) => s -> NodeState Pid Term Mailbox Connection -> Term -> IO Connection
 newConnection sock nodeState name = do
     (sendQueue, sendThread) <- (newSender sendLoop) sock
     recvThread <- (newReceiver recvLoop (sendQueue, nodeState, name)) sock
@@ -30,53 +30,53 @@ newConnection sock nodeState name = do
     putConnectionForNode nodeState name connection
     return connection
   where
-    newSender :: (s -> (TQueue m) -> IOx ()) -> s -> IOx (TQueue m, ThreadId)
+    newSender :: (s -> (TQueue m) -> IO ()) -> s -> IO (TQueue m, ThreadId)
     newSender f s = do
-        q <- toIOx $ newTQueueIO
-        t <- forkIOx (f s q)
+        q <- newTQueueIO
+        t <- forkIO (f s q)
         return (q, t)
-    newReceiver :: (s -> (TQueue m, r, n) -> IOx ()) -> (TQueue m, r, n) -> s -> IOx ThreadId
+    newReceiver :: (s -> (TQueue m, r, n) -> IO ()) -> (TQueue m, r, n) -> s -> IO ThreadId
     newReceiver f q s = do
-        t <- forkIOx (f s q)
+        t <- forkIO (f s q)
         return t
     onClose s r = do
         removeConnectionForNode nodeState name
-        killThreadX s
-        killThreadX r
+        killThread s
+        killThread r
         closeBuffered sock
 
-sendControlMessage :: Connection -> ControlMessage -> IOx ()
+sendControlMessage :: Connection -> ControlMessage -> IO ()
 sendControlMessage Connection{sendQueue} controlMessage = do
-    liftIO $ atomically $ writeTQueue sendQueue controlMessage
+    atomically $ writeTQueue sendQueue controlMessage
 
-closeConnection :: Connection -> IOx ()
+closeConnection :: Connection -> IO ()
 closeConnection Connection{onClose} = do
     onClose
 
 --------------------------------------------------------------------------------
-sendLoop :: (BufferedIOx s) => s -> (TQueue ControlMessage) -> IOx ()
+sendLoop :: (BufferedIOx s) => s -> (TQueue ControlMessage) -> IO ()
 sendLoop sock sendQueue =
-    forever (send `catchX` logX "send")
+    forever (send `catch` logX "send")
   where
     send = do
-        controlMessage <- liftIO $ atomically $ readTQueue sendQueue
+        controlMessage <- atomically $ readTQueue sendQueue
         runPutBuffered sock controlMessage
 
-recvLoop :: (BufferedIOx s) => s -> (TQueue ControlMessage, NodeState Pid Term Mailbox Connection, Term) -> IOx ()
+recvLoop :: (BufferedIOx s) => s -> (TQueue ControlMessage, NodeState Pid Term Mailbox Connection, Term) -> IO ()
 recvLoop sock (sendQueue, nodeState, name) = do
-    forever (recv `catchX`
+    forever (recv `catch`
                  (\x -> do
                       logX "recv" x
                       getConnectionForNode nodeState name >>= closeConnection
-                      throwX x))
+                      throw x))
   where
     recv = do
         controlMessage <- runGetBuffered sock
-        deliver controlMessage `catchX` logX "deliver"
+        deliver controlMessage `catch` logX "deliver"
     deliver controlMessage = do
         case controlMessage of
             TICK -> do
-                liftIO $ atomically $ writeTQueue sendQueue TICK
+                atomically $ writeTQueue sendQueue TICK
             LINK fromPid toPid -> do
                 mailbox <- getMailboxForPid nodeState toPid
                 deliverLink mailbox fromPid

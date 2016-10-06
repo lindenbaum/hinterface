@@ -1,5 +1,5 @@
 name:                hinterface
-version:             0.2.0.1
+version:             0.3.0.0
 synopsis:            Haskell / Erlang interoperability library
 description:         Please see README.md
 homepage:            https://github.com/LTI2000/hinterface
@@ -15,7 +15,7 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Data.IOx
+  exposed-modules:     Util.IOExtra
                      , Util.BufferedIOx
                      , Util.Socket
                      , Network.BufferedSocket
@@ -33,7 +33,7 @@ library
                      , Language.Erlang.Connection
   default-extensions:  OverloadedStrings
                      , NamedFieldPuns
-  ghc-options:         -Wall -O2
+  ghc-options:         -Wall -O2 -funbox-strict-fields
   build-depends:       QuickCheck >= 2.8 && < 3
                      , array
                      , base >= 4.9 && < 5
@@ -57,7 +57,7 @@ executable hinterface
   main-is:             Main.hs
   default-extensions:  OverloadedStrings
                      , NamedFieldPuns
-  ghc-options:         -Wall -O2 -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -Wall -O2 -threaded -rtsopts -with-rtsopts=-N -funbox-strict-fields
   build-depends:       base >= 4.9 && < 5
                      , hinterface
                      , bytestring
@@ -76,8 +76,7 @@ test-suite hinterface-test
                      , bytestring
                      , binary
                      , transformers
-  other-modules:       Data.IOxSpec
-                     , Language.Erlang.NodeDataSpec
+  other-modules:       Language.Erlang.NodeDataSpec
                      , Language.Erlang.HandshakeSpec
                      , Language.Erlang.ControlMessageSpec
                      , Language.Erlang.TermSpec

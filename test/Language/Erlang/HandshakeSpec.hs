@@ -1,21 +1,20 @@
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Language.Erlang.HandshakeSpec ( spec ) where
 
 import           Test.Hspec
 --import Test.Hspec.QuickCheck
 import           Test.QuickCheck
-
+import           Control.Exception
 import qualified Data.ByteString           as BS
 import qualified Data.ByteString.Char8     as CS
 import qualified Data.ByteString.Lazy      as LBS
 import           Data.IORef
 import           Data.Binary
 import           Data.List                 ( nub, sort )
-
-import           Data.IOx
+import           Util.IOExtra
 import           Util.BufferedIOx
-
 import           Language.Erlang.NodeData
 import           Language.Erlang.Handshake
 
@@ -91,13 +90,12 @@ spec = do
                                     }
                 handshakeData = HandshakeData { name, nodeData, cookie = "cookie" }
 
-            her_nodeName <- fromIOx $ do
-                                buffer0 <- newBuffer
-                                buffer1 <- newBuffer
+            her_nodeName <- do buffer0 <- newBuffer
+                               buffer1 <- newBuffer
 
-                                _ <- forkIOx $
-                                         doConnect (runPutBuffered buffer0) (runGetBuffered buffer1) handshakeData
-                                doAccept (runPutBuffered buffer1) (runGetBuffered buffer0) handshakeData
+                               _ <- forkIO $
+                                        doConnect (runPutBuffered buffer0) (runGetBuffered buffer1) handshakeData
+                               doAccept (runPutBuffered buffer1) (runGetBuffered buffer0) handshakeData
             her_nodeName `shouldBe`
                 "alive@localhost.localdomain"
 
@@ -128,19 +126,19 @@ spec = do
                                      , extra = ""
                                      }
                 handshakeData2 = HandshakeData { name = name2, nodeData = nodeData2, cookie = "cookie2" }
-            error_message <- fromIOx $
+            error_message <-
                                  (do
                                       buffer0 <- newBuffer
                                       buffer1 <- newBuffer
 
-                                      _ <- forkIOx $
+                                      _ <- forkIO $
                                                doConnect (runPutBuffered buffer0)
                                                          (runGetBuffered buffer1)
                                                          handshakeData1
-                                      doAccept (runPutBuffered buffer1) (runGetBuffered buffer0) handshakeData2) `catchX`
-                                     (return . CS.pack . show)
+                                      doAccept (runPutBuffered buffer1) (runGetBuffered buffer0) handshakeData2) `catch`
+                                     (return . CS.pack . show @IOException)
             error_message `shouldBe`
-                "Cookie mismatch: user error"
+                "user error (Cookie mismatch)"
 
 withLength16 :: LBS.ByteString -> LBS.ByteString
 withLength16 bytes = encode (fromIntegral (LBS.length bytes) :: Word16) `LBS.append` bytes
@@ -153,15 +151,15 @@ instance BufferedIOx Buffer where
     writeBuffered = writeBuffer
     closeBuffered = const (return ())
 
-newBuffer :: IOx Buffer
-newBuffer = toIOx $ do
+newBuffer :: IO Buffer
+newBuffer =
     Buffer <$> newIORef BS.empty
 
-readBuffer :: Buffer -> Int -> IOx BS.ByteString
+readBuffer :: Buffer -> Int -> IO BS.ByteString
 readBuffer buffer@Buffer{bufIO} len
     | len < 0 = error $ "Bad length: " ++ show len
     | len == 0 = return BS.empty
-    | otherwise = toIOx $ do
+    | otherwise = do
           atomicModifyIORef' bufIO
                              (\buf -> if BS.null buf
                                       then (BS.empty, Nothing)
@@ -172,9 +170,8 @@ readBuffer buffer@Buffer{bufIO} len
                                                else let (buf0, buf1) = BS.splitAt len buf
                                                     in
                                                         (buf1, Just buf0)) >>=
-              maybe (fromIOx $ readBuffer buffer len) (return)
+              maybe (readBuffer buffer len) (return)
 
-writeBuffer :: Buffer -> LBS.ByteString -> IOx ()
+writeBuffer :: Buffer -> LBS.ByteString -> IO ()
 writeBuffer Buffer{bufIO} bytes =
-    toIOx $ do
-        atomicModifyIORef' bufIO (\buf -> (buf `BS.append` (LBS.toStrict bytes), ()))
+    do atomicModifyIORef' bufIO (\buf -> (buf `BS.append` (LBS.toStrict bytes), ()))

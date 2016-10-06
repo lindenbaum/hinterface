@@ -16,11 +16,11 @@ import qualified Data.ByteString            as BS
 import qualified Data.ByteString.Lazy.Char8 as CL
 import           Data.Maybe
 
-import           Data.IOx
 import           Language.Erlang.NodeData
 import           Network.BufferedSocket
 import           Util.Binary
 import           Util.BufferedIOx
+import           Util.IOExtra
 import           Util.Socket
 
 --------------------------------------------------------------------------------
@@ -69,7 +69,7 @@ instance Binary NamesResponse where
 
 -- | List all registered nodes
 epmdNames :: BS.ByteString -- ^ hostname
-          -> IOx NamesResponse
+          -> IO NamesResponse
 epmdNames hostName = do
     withBufferedSocket hostName $ sendRequest NamesRequest
 
@@ -101,7 +101,7 @@ instance Binary LookupNodeResponse where
 -- | Lookup a node
 lookupNode :: BS.ByteString -- ^ alive
            -> BS.ByteString -- ^ hostname
-           -> IOx NodeData
+           -> IO NodeData
 lookupNode alive hostName = do
     LookupNodeResponse r <- withBufferedSocket hostName $ sendRequest (LookupNodeRequest alive)
     case r of
@@ -141,7 +141,7 @@ data NodeRegistration = NodeRegistration { nr_sock     :: BufferedSocket
 -- | Register a node
 registerNode :: NodeData -- ^ node
              -> BS.ByteString -- ^ hostName
-             -> IOx NodeRegistration
+             -> IO NodeRegistration
 registerNode node hostName = do
     sock <- connectBufferedSocket hostName
     RegisterNodeResponse r <- sendRequest (RegisterNodeRequest node) sock
@@ -153,19 +153,19 @@ registerNode node hostName = do
             errorX alreadyExistsErrorType (show $ aliveName node)
 
 --------------------------------------------------------------------------------
-sendRequest :: (BufferedIOx s, Binary a, Binary b) => a -> s -> IOx b
+sendRequest :: (BufferedIOx s, Binary a, Binary b) => a -> s -> IO b
 sendRequest req sock = do
     runPutBuffered sock req
     runGetBuffered sock
 
 connectBufferedSocket :: BS.ByteString -- ^ hostName
-                      -> IOx BufferedSocket
+                      -> IO BufferedSocket
 connectBufferedSocket hostName = do
     connectSocket hostName epmdPort >>= makeBuffered
 
 withBufferedSocket ::  BS.ByteString -- ^ hostName
-                   -> (BufferedSocket -> IOx b)
-                   -> IOx b
+                   -> (BufferedSocket -> IO b)
+                   -> IO b
 withBufferedSocket hostName f = do
     sock <- connectBufferedSocket hostName
     res <- f sock

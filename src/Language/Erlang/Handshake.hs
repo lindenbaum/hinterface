@@ -1,4 +1,5 @@
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE Strict #-}
 
 module Language.Erlang.Handshake
     ( HandshakeData(..)
@@ -17,10 +18,7 @@ import qualified Data.ByteString          as BS
 import           Data.Binary
 import           Data.Binary.Get
 import           Data.Binary.Put
-
 import           Util.Binary
-
-import           Data.IOx
 import           Language.Erlang.Digest
 import           Language.Erlang.NodeData
 
@@ -145,18 +143,18 @@ instance Binary ChallengeAck where
         return ChallengeAck { ca_digest }
 
 --------------------------------------------------------------------------------
-doConnect :: (forall o. Binary o => o -> IOx ()) -> (forall i. (Binary i) => IOx i) -> HandshakeData -> IOx ()
+doConnect :: (forall o. Binary o => o -> IO ()) -> (forall i. (Binary i) => IO i) -> HandshakeData -> IO ()
 doConnect send recv HandshakeData{name = name@Name{n_distVer = our_distVer},nodeData = NodeData{loVer,hiVer},cookie} = do
     send name
 
     her_status <- recv
     case her_status of
         Ok -> return ()
-        _ -> errorX userErrorType $ "Bad status: " ++ show her_status
+        _ -> fail $ "Bad status: " ++ show her_status
 
     Challenge{c_distVer = her_distVer,c_distFlags = her_distFlags,c_challenge = her_challenge,c_nodeName = her_nodeName} <- recv
     checkVersionRange her_distVer loVer hiVer
-    unless (our_distVer == her_distVer) (errorX userErrorType "Version mismatch")
+    unless (our_distVer == her_distVer) (fail "Version mismatch")
 
     our_challenge <- genChallenge
     send ChallengeReply { cr_challenge = our_challenge, cr_digest = genDigest her_challenge cookie }
@@ -165,7 +163,7 @@ doConnect send recv HandshakeData{name = name@Name{n_distVer = our_distVer},node
     checkCookie her_digest our_challenge cookie
 
 --------------------------------------------------------------------------------
-doAccept :: (forall o. Binary o => o -> IOx ()) -> (forall i. (Binary i) => IOx i) -> HandshakeData -> IOx BS.ByteString
+doAccept :: (forall o. Binary o => o -> IO ()) -> (forall i. (Binary i) => IO i) -> HandshakeData -> IO BS.ByteString
 doAccept send recv HandshakeData{name = Name{n_distFlags,n_nodeName},nodeData = NodeData{loVer,hiVer},cookie} = do
     Name{n_distVer = her_distVer,n_distFlags = her_distFlags,n_nodeName = her_nodeName} <- recv
     checkVersionRange her_distVer loVer hiVer
@@ -181,10 +179,10 @@ doAccept send recv HandshakeData{name = Name{n_distFlags,n_nodeName},nodeData = 
     send ChallengeAck { ca_digest = genDigest her_challenge cookie }
     return her_nodeName
 
-checkVersionRange :: DistributionVersion -> DistributionVersion -> DistributionVersion -> IOx ()
+checkVersionRange :: DistributionVersion -> DistributionVersion -> DistributionVersion -> IO ()
 checkVersionRange her_distVer loVer hiVer =
-    unless (loVer <= her_distVer && her_distVer <= hiVer) (errorX userErrorType "Version out of range")
+    unless (loVer <= her_distVer && her_distVer <= hiVer) (fail "Version out of range")
 
-checkCookie :: BS.ByteString -> Word32 -> BS.ByteString -> IOx ()
+checkCookie :: BS.ByteString -> Word32 -> BS.ByteString -> IO ()
 checkCookie her_digest our_challenge cookie =
-    unless (her_digest == genDigest our_challenge cookie) (errorX userErrorType "Cookie mismatch")
+    unless (her_digest == genDigest our_challenge cookie) (fail "Cookie mismatch")

@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE Strict                     #-}
 {-# LANGUAGE KindSignatures             #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
