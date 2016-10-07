@@ -64,17 +64,18 @@ import           Control.Monad         as M ( replicateM )
 import           Data.String
 import           Data.ByteString       ( ByteString )
 import           Data.ByteString.Char8 ( unpack )
-import qualified Data.ByteString       as BS ( head, length, tail, unpack )
+import qualified Data.ByteString       as BS ( head, length, tail, unpack, foldr' )
 import qualified Data.ByteString.Char8 as CS ( ByteString, pack, unpack )
 import           Data.Vector           ( (!), Vector, fromList, toList )
 import qualified Data.Vector           as V ( length, replicateM, tail )
-import qualified Data.List             as L ( length )
+import qualified Data.List             as L ( length, unfoldr, length )
 import           Data.Binary
 import           Data.Binary.Put
 import           Data.Binary.Get       hiding ( getBytes )
 import           Util.Binary
 import           Test.QuickCheck
 import           Data.Int
+import           Data.Bits             (shiftR, (.&.))
 
 --------------------------------------------------------------------------------
 data Term = Integer Integer
@@ -503,8 +504,25 @@ instance Binary Term where
         | i >= -0x80000000 && i <= 0x7FFFFFFF = do
               putWord8 integer_ext
               putWord32be (fromIntegral i)
-        | otherwise = do
-              error $ "Integer out ouf range: " ++ show i
+        | otherwise =
+            -- NOTE: the biggest number presentable is 2^maxBits bits long where
+            -- maxBits = 2^32 * 8 = 2^35 - OTOH addressable main memory: 2^64 *
+            -- 8 bits = 2^67 bits, even with tomorrows 2048 bit address buses
+            -- for 256 bit words this would be at most 2^2056 addressable bits.
+            -- large_big_ext allows 2^(2^35) = 2^34359738368 addressable bits ..
+            -- hence YES by all practical means 'otherwise' is the correct
+            -- function clause guard.
+           do let digits = L.unfoldr takeLSB (abs i)
+                    where takeLSB x
+                            | x == 0     = Nothing
+                            | otherwise = Just (fromIntegral (x Data.Bits..&. 0xff), x `shiftR` 8)
+              if L.length digits < 256
+                then do putWord8 small_big_ext
+                        putWord8 (fromIntegral (L.length digits))
+                else do putWord8 large_big_ext
+                        putWord32be (fromIntegral (L.length digits))
+              putWord8 (if i >= 0 then 0 else 1)
+              mapM_ putWord8 digits
 
     put (Float d) = do
         putWord8 new_float_ext
@@ -578,6 +596,8 @@ instance Binary Term where
             | tag == small_integer_ext =
                   getSmallInteger (Integer . fromIntegral)
             | tag == integer_ext = getInteger (Integer . toInteger . (fromIntegral :: Word32 -> Int32))
+            | tag == small_big_ext = getWord8 *> getWord8    >>= getBigInteger . fromIntegral
+            | tag == large_big_ext = getWord8 *> getWord32be >>= getBigInteger . fromIntegral
             | tag == atom_ext = getAtom Atom
             | tag == port_ext = getPort Port
             | tag == pid_ext = getPid Pid
@@ -629,6 +649,11 @@ getInteger :: (Word32 -> a) -> Get a
 getInteger f = do
     matchWord8 integer_ext
     f <$> getWord32be
+
+getBigInteger :: Int -> Get Term
+getBigInteger len = mkBigInteger <$> getWord8 <*> getByteString len
+  where mkBigInteger signByte bs = Integer ((if signByte == 0 then 1 else (-1)) * absInt)
+          where absInt = BS.foldr' (\ b acc -> 256 * acc + fromIntegral b) 0 bs
 
 getAtom :: (ByteString -> a) -> Get a
 getAtom f = do
