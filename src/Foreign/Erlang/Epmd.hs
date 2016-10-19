@@ -1,4 +1,4 @@
-module Language.Erlang.Epmd
+module Foreign.Erlang.Epmd
     ( -- * List registered nodes
       epmdNames
     , NamesResponse(..)
@@ -16,7 +16,7 @@ import qualified Data.ByteString            as BS
 import qualified Data.ByteString.Lazy.Char8 as CL
 import           Data.Maybe
 
-import           Language.Erlang.NodeData
+import           Foreign.Erlang.NodeData
 import           Network.BufferedSocket
 import           Util.Binary
 import           Util.BufferedIOx

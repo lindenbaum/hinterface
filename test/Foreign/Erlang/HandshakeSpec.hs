@@ -1,7 +1,7 @@
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Language.Erlang.HandshakeSpec ( spec ) where
+module Foreign.Erlang.HandshakeSpec ( spec ) where
 
 import           Test.Hspec
 --import Test.Hspec.QuickCheck
@@ -15,8 +15,8 @@ import           Data.Binary
 import           Data.List                 ( nub, sort )
 import           Util.IOExtra
 import           Util.BufferedIOx
-import           Language.Erlang.NodeData
-import           Language.Erlang.Handshake
+import           Foreign.Erlang.NodeData
+import           Foreign.Erlang.Handshake
 
 spec :: Spec
 spec = do

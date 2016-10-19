@@ -1,7 +1,7 @@
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE Strict         #-}
 
-module Language.Erlang.Digest
+module Foreign.Erlang.Digest
     ( genChallenge
     , genDigest
     ) where

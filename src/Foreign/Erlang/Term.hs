@@ -6,7 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
 
-module Language.Erlang.Term
+module Foreign.Erlang.Term
     ( -- * External Term Format
       Term()
     , putTerm

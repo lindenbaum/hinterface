@@ -1,5 +1,5 @@
 {-# LANGUAGE Strict #-}
-module Language.Erlang.NodeState
+module Foreign.Erlang.NodeState
     ( NodeState()
     , newNodeState
     , new_pid

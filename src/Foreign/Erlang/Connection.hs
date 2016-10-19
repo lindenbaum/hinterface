@@ -1,5 +1,5 @@
 {-# LANGUAGE Strict #-}
-module Language.Erlang.Connection
+module Foreign.Erlang.Connection
     ( Connection()
     , newConnection
     , sendControlMessage
@@ -11,10 +11,10 @@ import           Control.Concurrent
 import           Control.Concurrent.STM
 import           Util.BufferedIOx
 import           Util.IOExtra
-import           Language.Erlang.NodeState
-import           Language.Erlang.Term
-import           Language.Erlang.ControlMessage
-import           Language.Erlang.Mailbox
+import           Foreign.Erlang.NodeState
+import           Foreign.Erlang.Term
+import           Foreign.Erlang.ControlMessage
+import           Foreign.Erlang.Mailbox
 
 --------------------------------------------------------------------------------
 data Connection = Connection { sendQueue :: TQueue ControlMessage

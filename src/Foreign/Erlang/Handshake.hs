@@ -1,7 +1,7 @@
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE Strict #-}
 
-module Language.Erlang.Handshake
+module Foreign.Erlang.Handshake
     ( HandshakeData(..)
     , doConnect
     , doAccept
@@ -19,8 +19,8 @@ import           Data.Binary
 import           Data.Binary.Get
 import           Data.Binary.Put
 import           Util.Binary
-import           Language.Erlang.Digest
-import           Language.Erlang.NodeData
+import           Foreign.Erlang.Digest
+import           Foreign.Erlang.NodeData
 
 --------------------------------------------------------------------------------
 data HandshakeData = HandshakeData { name     :: Name

@@ -1,4 +1,4 @@
-module Language.Erlang.NodeDataSpec ( spec ) where
+module Foreign.Erlang.NodeDataSpec ( spec ) where
 
 import           Test.Hspec
 --import Test.Hspec.QuickCheck
@@ -8,7 +8,7 @@ import           Data.Word
 import           Data.List                ( nub, sort )
 import           Data.Binary              ( decode, encode )
 
-import           Language.Erlang.NodeData
+import           Foreign.Erlang.NodeData
 
 spec :: Spec
 spec = do

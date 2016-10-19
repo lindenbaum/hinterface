@@ -21,16 +21,16 @@ library
                      , Network.BufferedSocket
                      , Util.Binary
                      , Util.FloatCast
-                     , Language.Erlang.NodeState
-                     , Language.Erlang.NodeData
-                     , Language.Erlang.Epmd
-                     , Language.Erlang.Digest
-                     , Language.Erlang.Handshake
-                     , Language.Erlang.Term
-                     , Language.Erlang.LocalNode
-                     , Language.Erlang.ControlMessage
-                     , Language.Erlang.Mailbox
-                     , Language.Erlang.Connection
+                     , Foreign.Erlang.NodeState
+                     , Foreign.Erlang.NodeData
+                     , Foreign.Erlang.Epmd
+                     , Foreign.Erlang.Digest
+                     , Foreign.Erlang.Handshake
+                     , Foreign.Erlang.Term
+                     , Foreign.Erlang.LocalNode
+                     , Foreign.Erlang.ControlMessage
+                     , Foreign.Erlang.Mailbox
+                     , Foreign.Erlang.Connection
   default-extensions:  OverloadedStrings
                      , NamedFieldPuns
   ghc-options:         -Wall -O2 -funbox-strict-fields
@@ -52,19 +52,6 @@ library
 
   default-language:    Haskell2010
 
-executable hinterface
-  hs-source-dirs:      app
-  main-is:             Main.hs
-  default-extensions:  OverloadedStrings
-                     , NamedFieldPuns
-  ghc-options:         -Wall -O2 -threaded -rtsopts -with-rtsopts=-N -funbox-strict-fields
-  build-depends:       base >= 4.9 && < 5
-                     , hinterface
-                     , bytestring
-                     , transformers
-  other-modules:       Person
-  default-language:    Haskell2010
-
 test-suite hinterface-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
@@ -76,10 +63,10 @@ test-suite hinterface-test
                      , bytestring
                      , binary
                      , transformers
-  other-modules:       Language.Erlang.NodeDataSpec
-                     , Language.Erlang.HandshakeSpec
-                     , Language.Erlang.ControlMessageSpec
-                     , Language.Erlang.TermSpec
+  other-modules:       Foreign.Erlang.NodeDataSpec
+                     , Foreign.Erlang.HandshakeSpec
+                     , Foreign.Erlang.ControlMessageSpec
+                     , Foreign.Erlang.TermSpec
   default-extensions:  OverloadedStrings
                      , NamedFieldPuns
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N

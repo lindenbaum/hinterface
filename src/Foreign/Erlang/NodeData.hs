@@ -1,5 +1,5 @@
 {-# LANGUAGE Strict #-}
-module Language.Erlang.NodeData
+module Foreign.Erlang.NodeData
     ( DistributionVersion(..)
     , matchDistributionVersion
     , DistributionFlag(..)

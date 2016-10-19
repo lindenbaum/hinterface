@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Language.Erlang.LocalNode
+module Foreign.Erlang.LocalNode
     ( LocalNode()
     , newLocalNode
     , registerLocalNode
@@ -26,14 +26,14 @@ import           Util.BufferedIOx
 import           Util.Socket
 import           Network.BufferedSocket
 
-import           Language.Erlang.NodeState
-import           Language.Erlang.NodeData
-import           Language.Erlang.Epmd
-import           Language.Erlang.Handshake
-import           Language.Erlang.Term
-import           Language.Erlang.ControlMessage
-import           Language.Erlang.Connection
-import           Language.Erlang.Mailbox
+import           Foreign.Erlang.NodeState
+import           Foreign.Erlang.NodeData
+import           Foreign.Erlang.Epmd
+import           Foreign.Erlang.Handshake
+import           Foreign.Erlang.Term
+import           Foreign.Erlang.ControlMessage
+import           Foreign.Erlang.Connection
+import           Foreign.Erlang.Mailbox
 
 
 data LocalNode = LocalNode { handshakeData :: HandshakeData

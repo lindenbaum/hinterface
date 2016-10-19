@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE Strict              #-}
 
-module Language.Erlang.ControlMessage ( ControlMessage(..) ) where
+module Foreign.Erlang.ControlMessage ( ControlMessage(..) ) where
 
 import           Control.Applicative
 import           Control.Monad
@@ -12,7 +12,7 @@ import           Data.Binary
 import           Data.Binary.Get
 import           Data.Binary.Put
 import           Data.Maybe
-import           Language.Erlang.Term
+import           Foreign.Erlang.Term
 import           Prelude                   hiding (length)
 import           Test.QuickCheck
 import           Util.Binary

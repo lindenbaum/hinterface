@@ -1,7 +1,7 @@
 {-# LANGUAGE Strict #-}
-module Language.Erlang.Mailbox ( Mailbox(..) ) where
+module Foreign.Erlang.Mailbox ( Mailbox(..) ) where
 
-import           Language.Erlang.Term
+import           Foreign.Erlang.Term
 
 data Mailbox = Mailbox { getPid             :: Pid
                        , deliverLink        :: Pid -> IO ()

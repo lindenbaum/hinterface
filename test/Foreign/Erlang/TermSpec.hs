@@ -1,13 +1,13 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Language.Erlang.TermSpec ( spec ) where
+module Foreign.Erlang.TermSpec ( spec ) where
 
 import           Data.Binary           (decode, encode)
 import           Data.ByteString.Char8 ()
 import qualified Data.ByteString.Lazy  as B
 import           Data.Word             ()
-import           Language.Erlang.Term
+import           Foreign.Erlang.Term
 import           Test.Hspec
 import           Test.QuickCheck
 

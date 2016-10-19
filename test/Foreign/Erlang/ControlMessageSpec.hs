@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Language.Erlang.ControlMessageSpec ( spec ) where
+module Foreign.Erlang.ControlMessageSpec ( spec ) where
 
 import           Test.Hspec
 import           Test.QuickCheck
@@ -8,8 +8,8 @@ import           Test.QuickCheck
 import qualified Data.ByteString.Lazy           as LBS
 import           Data.Binary                    ( decode, encode )
 
-import           Language.Erlang.ControlMessage
-import           Language.Erlang.Term
+import           Foreign.Erlang.ControlMessage
+import           Foreign.Erlang.Term
 
 spec :: Spec
 spec = describe "ControlMessage" $ do
