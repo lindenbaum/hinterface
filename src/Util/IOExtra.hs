@@ -1,4 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
+
 module Util.IOExtra
     ( errorX
     , maybeErrorX
@@ -6,17 +7,17 @@ module Util.IOExtra
     , module X
     ) where
 
-import           Control.Concurrent as X
-import           Control.Exception  as X
-import           System.IO.Error    as X
+import           Control.Concurrent     as X
+import           Control.Monad.IO.Class as X
+import           Control.Exception      as X
+import           System.IO.Error        as X
 
 --------------------------------------------------------------------------------
-
-errorX :: IOErrorType -> String -> IO a
+errorX :: (MonadIO m) => IOErrorType -> String -> m a
 errorX errorType location =
     throw $ mkIOError errorType location Nothing Nothing
 
-maybeErrorX :: IOErrorType -> String -> Maybe a -> IO a
+maybeErrorX :: (MonadIO m) => IOErrorType -> String -> Maybe a -> m a
 maybeErrorX errorType location =
     maybe (errorX errorType location) (return)
 

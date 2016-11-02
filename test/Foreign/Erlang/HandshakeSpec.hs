@@ -146,9 +146,9 @@ withLength16 bytes = encode (fromIntegral (LBS.length bytes) :: Word16) `LBS.app
 newtype Buffer = Buffer { bufIO :: IORef BS.ByteString }
 
 instance BufferedIOx Buffer where
-    readBuffered = readBuffer
-    unreadBuffered = (. LBS.fromStrict) . writeBuffer
-    writeBuffered = writeBuffer
+    readBuffered a = liftIO . readBuffer a
+    unreadBuffered a = liftIO . writeBuffer a . LBS.fromStrict
+    writeBuffered a = liftIO . writeBuffer a
     closeBuffered = const (return ())
 
 newBuffer :: IO Buffer

@@ -4,27 +4,24 @@ module Network.BufferedSocket
     , socketPort
     ) where
 
-import           Control.Monad                  (unless)
-import qualified Data.ByteString                as BS (ByteString, append,
-                                                       empty, length, null,
-                                                       splitAt)
-import qualified Data.ByteString.Lazy           as LBS (ByteString)
-import           Data.IORef                     (IORef, atomicModifyIORef',
-                                                 newIORef, writeIORef)
-import qualified Network.Socket                 as S (PortNumber, Socket, close,
-                                                      socketPort)
-import qualified Network.Socket.ByteString      as NBS (recv)
-import qualified Network.Socket.ByteString.Lazy as NBL (sendAll)
+import           Control.Monad                  ( unless )
+import           Control.Monad.IO.Class         ( MonadIO(..), liftIO )
+import qualified Data.ByteString                as BS ( ByteString, append, empty, length, null, splitAt )
+import qualified Data.ByteString.Lazy           as LBS ( ByteString )
+import           Data.IORef                     ( IORef, atomicModifyIORef', newIORef, writeIORef )
+import qualified Network.Socket                 as S ( PortNumber, Socket, close, socketPort )
+import qualified Network.Socket.ByteString      as NBS ( recv )
+import qualified Network.Socket.ByteString.Lazy as NBL ( sendAll )
 import           Util.BufferedIOx
 
 --------------------------------------------------------------------------------
 newtype BufferedSocket = BufferedSocket (S.Socket, IORef BS.ByteString)
 
 instance BufferedIOx BufferedSocket where
-    readBuffered = socketRecv
-    unreadBuffered = pushback
-    writeBuffered = socketSend
-    closeBuffered = socketClose
+    readBuffered a = liftIO . socketRecv a
+    unreadBuffered a = liftIO . pushback a
+    writeBuffered a = liftIO . socketSend a
+    closeBuffered = liftIO . socketClose
 
 makeBuffered :: S.Socket -> IO BufferedSocket
 makeBuffered sock = do
@@ -54,14 +51,14 @@ socketRecv (BufferedSocket (sock, bufIO)) len
 
 pushback :: BufferedSocket -> BS.ByteString -> IO ()
 pushback (BufferedSocket (_, bufIO)) bytes = do
-    unless (BS.null bytes) $
-        do atomicModifyIORef' bufIO (\buf -> (buf `BS.append` bytes, ()))
+    unless (BS.null bytes) $ do
+        atomicModifyIORef' bufIO (\buf -> (buf `BS.append` bytes, ()))
 
 socketSend :: BufferedSocket -> LBS.ByteString -> IO ()
-socketSend (BufferedSocket (sock, _)) bl =
-  do NBL.sendAll sock bl
+socketSend (BufferedSocket (sock, _)) bl = do
+    NBL.sendAll sock bl
 
 socketClose :: BufferedSocket -> IO ()
-socketClose (BufferedSocket (sock, bufIO)) =
-  do writeIORef bufIO BS.empty
-     S.close sock
+socketClose (BufferedSocket (sock, bufIO)) = do
+    writeIORef bufIO BS.empty
+    S.close sock

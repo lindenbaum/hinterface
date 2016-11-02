@@ -5,18 +5,19 @@ module Util.BufferedIOx
     , runPutBuffered
     ) where
 
+import           Control.Monad.IO.Class
 import           Data.Binary
-import qualified Data.ByteString      as BS (ByteString)
-import qualified Data.ByteString.Lazy as LBS (ByteString)
+import qualified Data.ByteString        as BS ( ByteString )
+import qualified Data.ByteString.Lazy   as LBS ( ByteString )
 import           Util.Binary
 
 import           Util.IOExtra
 
 class BufferedIOx a where
-    readBuffered :: a -> Int -> IO BS.ByteString
-    unreadBuffered :: a -> BS.ByteString -> IO ()
-    writeBuffered :: a -> LBS.ByteString -> IO ()
-    closeBuffered :: a -> IO ()
+    readBuffered :: (MonadIO m) => a -> Int -> m BS.ByteString
+    unreadBuffered :: (MonadIO m) => a -> BS.ByteString -> m ()
+    writeBuffered :: (MonadIO m) => a -> LBS.ByteString -> m ()
+    closeBuffered :: (MonadIO m) => a -> m ()
 
 runGetBuffered :: (BufferedIOx s, Binary a) => s -> IO a
 runGetBuffered = runGetSocket' get

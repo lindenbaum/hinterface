@@ -1,17 +1,21 @@
-{-# LANGUAGE Strict #-}
+{-# LANGUAGE Strict     #-}
+{-# LANGUAGE RankNTypes #-}
+
 module Foreign.Erlang.Mailbox ( Mailbox(..) ) where
+
+import           Util.IOExtra
 
 import           Foreign.Erlang.Term
 
 data Mailbox = Mailbox { getPid             :: Pid
-                       , deliverLink        :: Pid -> IO ()
-                       , deliverSend        :: Term -> IO ()
-                       , deliverExit        :: Pid -> Term -> IO ()
-                       , deliverUnlink      :: Pid -> IO ()
-                       , deliverRegSend     :: Pid -> Term -> IO ()
-                       , deliverGroupLeader :: Pid -> IO ()
-                       , deliverExit2       :: Pid -> Term -> IO ()
-                       , send               :: Pid -> Term -> IO ()
-                       , sendReg            :: Term -> Term -> Term -> IO ()
-                       , receive            :: IO Term
+                       , deliverLink        :: forall m. (MonadIO m) => Pid -> m ()
+                       , deliverSend        :: forall m. (MonadIO m) => Term -> m ()
+                       , deliverExit        :: forall m. (MonadIO m) => Pid -> Term -> m ()
+                       , deliverUnlink      :: forall m. (MonadIO m) => Pid -> m ()
+                       , deliverRegSend     :: forall m. (MonadIO m) => Pid -> Term -> m ()
+                       , deliverGroupLeader :: forall m. (MonadIO m) => Pid -> m ()
+                       , deliverExit2       :: forall m. (MonadIO m) => Pid -> Term -> m ()
+                       , send               :: forall m. (MonadIO m) => Pid -> Term -> m ()
+                       , sendReg            :: forall m. (MonadIO m) => Term -> Term -> Term -> m ()
+                       , receive            :: forall m. (MonadIO m) => m Term
                        }

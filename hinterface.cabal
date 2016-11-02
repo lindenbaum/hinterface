@@ -1,5 +1,5 @@
 name:                hinterface
-version:             0.3.1.0
+version:             0.4.0.0
 synopsis:            Haskell / Erlang interoperability library
 description:         Please see README.md
 homepage:            https://github.com/LTI2000/hinterface
