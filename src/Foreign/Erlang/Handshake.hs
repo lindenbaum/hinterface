@@ -152,7 +152,7 @@ doConnect send recv HandshakeData{name = name@Name{n_distVer = our_distVer},node
         Ok -> return ()
         _ -> fail $ "Bad status: " ++ show her_status
 
-    Challenge{c_distVer = her_distVer,c_distFlags = her_distFlags,c_challenge = her_challenge,c_nodeName = her_nodeName} <- recv
+    Challenge{c_distVer = her_distVer,c_challenge = her_challenge} <- recv
     checkVersionRange her_distVer loVer hiVer
     unless (our_distVer == her_distVer) (fail "Version mismatch")
 
@@ -165,7 +165,7 @@ doConnect send recv HandshakeData{name = name@Name{n_distVer = our_distVer},node
 --------------------------------------------------------------------------------
 doAccept :: (forall o. Binary o => o -> IO ()) -> (forall i. (Binary i) => IO i) -> HandshakeData -> IO BS.ByteString
 doAccept send recv HandshakeData{name = Name{n_distFlags,n_nodeName},nodeData = NodeData{loVer,hiVer},cookie} = do
-    Name{n_distVer = her_distVer,n_distFlags = her_distFlags,n_nodeName = her_nodeName} <- recv
+    Name{n_distVer = her_distVer,n_nodeName = her_nodeName} <- recv
     checkVersionRange her_distVer loVer hiVer
 
     send Ok

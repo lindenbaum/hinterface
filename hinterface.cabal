@@ -33,6 +33,7 @@ library
                      , Foreign.Erlang.Connection
   default-extensions:  OverloadedStrings
                      , NamedFieldPuns
+                     , FlexibleContexts
   ghc-options:         -Wall -O2 -funbox-strict-fields
   build-depends:       QuickCheck >= 2.8 && < 3
                      , array
@@ -42,6 +43,11 @@ library
                      , containers
                      , cryptonite
                      , either
+                     , enclosed-exceptions >= 1.0 && < 1.1
+                     , lifted-async >= 0.9 && < 1.0
+                     , lifted-base >= 0.2 && < 0.3
+                     , monad-control >= 1.0 && < 1.1
+                     , monad-logger >= 0.3 && < 0.4
                      , memory
                      , mtl
                      , network

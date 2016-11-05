@@ -11,42 +11,46 @@ import qualified Data.ByteString.Char8 as CS
 import           Data.Word
 import           Network.Socket        hiding (recv, recvFrom, send, sendTo)
 
+import           Util.IOExtra
+
 --------------------------------------------------------------------------------
-connectSocket :: BS.ByteString -> Word16 -> IO Socket
+connectSocket :: (MonadLoggerIO m) => BS.ByteString -> Word16 -> m Socket
 connectSocket hostName portNumber = do
     (sock, sa) <- createSocket hostName (Just portNumber)
-    setSocketOption sock NoDelay 1
-    connect sock sa
-    return sock
+    liftIO $ do
+        setSocketOption sock NoDelay 1
+        connect sock sa
+        return sock
 
-serverSocket :: BS.ByteString -> IO (Socket, Word16)
+serverSocket :: (MonadLoggerIO m) => BS.ByteString -> m (Socket, Word16)
 serverSocket hostName = do
     (sock, sa) <- createSocket hostName Nothing
-    bind sock sa
-    listen sock 5
-    port <- socketPort sock
-    return (sock, fromIntegral port)
+    liftIO $ do
+        bind sock sa
+        listen sock 5
+        port <- socketPort sock
+        return (sock, fromIntegral port)
 
-acceptSocket :: Socket -> IO Socket
-acceptSocket sock = do
+acceptSocket :: (MonadLoggerIO m) => Socket -> m Socket
+acceptSocket sock = liftIO $ do
     (sock', _sa) <- accept sock
     setSocketOption sock' NoDelay 1
     return sock'
 
-closeSock :: Socket -> IO ()
-closeSock = close
+closeSock :: (MonadLoggerIO m) => Socket -> m ()
+closeSock = liftIO . close
 
-createSocket :: BS.ByteString -> Maybe Word16 -> IO (Socket, SockAddr)
+createSocket :: (MonadLoggerIO m) => BS.ByteString -> Maybe Word16 -> m (Socket, SockAddr)
 createSocket hostName portNumber = do
     ai <- addrInfo hostName portNumber
-    sock <- socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai)
-    return (sock, (addrAddress ai))
+    sock <- liftIO $ socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai)
+    return (sock, addrAddress ai)
 
-addrInfo :: BS.ByteString -> Maybe Word16 -> IO AddrInfo
+addrInfo :: (MonadLoggerIO m) => BS.ByteString -> Maybe Word16 -> m AddrInfo
 addrInfo host port = do
     let hints = defaultHints { addrFlags = [ AI_CANONNAME, AI_NUMERICSERV, AI_ADDRCONFIG ]
                              , addrFamily = AF_INET
                              , addrSocketType = Stream
                              }
-    (ai : _) <- getAddrInfo (Just hints) (Just (CS.unpack host)) (show <$> port)
+    (ai : _) <- liftIO $ getAddrInfo (Just hints) (Just (CS.unpack host)) (show <$> port)
     return ai

@@ -16,10 +16,9 @@ import           Prelude                       hiding ( id )
 
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Control.Concurrent
+import           Control.Concurrent.Lifted
 import           Control.Concurrent.STM
-import           Control.Exception
-import qualified Data.ByteString               as BS
+import qualified Data.ByteString as BS
 import           Data.Char
 import           Data.Word
 
@@ -43,7 +42,7 @@ data LocalNode = LocalNode { handshakeData :: HandshakeData
                            , acceptor      :: Maybe (Socket, ThreadId)
                            }
 
-newLocalNode :: (MonadIO m) => BS.ByteString -> BS.ByteString -> m LocalNode
+newLocalNode :: (MonadLoggerIO m) => BS.ByteString -> BS.ByteString -> m LocalNode
 newLocalNode nodeName cookie = do
     let dFlags = DistributionFlags [ EXTENDED_REFERENCES
                                    , FUN_TAGS
@@ -72,45 +71,59 @@ splitNodeName a = case BS.split (fromIntegral (ord '@')) a of
     [ alive, host ] -> (alive, host)
     _ -> error $ "Illegal node name: " ++ show a
 
-registerLocalNode :: (MonadIO m) => LocalNode -> m LocalNode
+registerLocalNode :: (MonadBaseControl IO m, MonadLoggerIO m) => LocalNode -> m LocalNode
 registerLocalNode localNode@LocalNode{handshakeData = hsn@HandshakeData{name = Name{n_nodeName},nodeData},nodeState} = do
     let (_, hostName) = splitNodeName n_nodeName
-    (sock, portNo) <- liftIO $ serverSocket hostName
+    (sock, portNo) <- serverSocket hostName
     let nodeData' = nodeData { portNo }
-        handshakeData' = hsn { nodeData = nodeData' }
-    threadId <- liftIO $ forkIO (acceptLoop sock handshakeData')
-    registration <- Just <$> (liftIO $ registerNode nodeData' hostName)
-    return localNode { handshakeData = handshakeData', registration, acceptor = Just (sock, threadId) }
+    let handshakeData' = hsn { nodeData = nodeData' }
+    mreg <- registerNode nodeData' hostName
+    case mreg of
+        Just reg -> do
+            threadId <- fork (acceptLoop sock handshakeData')
+            return localNode { handshakeData = handshakeData'
+                             , registration = Just reg
+                             , acceptor = Just (sock, threadId)
+                             }
+        Nothing -> do
+            logError (fromString (printf "registerLocalNode failed, nodeName: %s, nodeData: %s, hostName: %s, port: %d"
+                                         (BS.unpack n_nodeName)
+                                         (show nodeData)
+                                         (show hostName)
+                                         portNo))
+todo throw
   where
     acceptLoop sock handshakeData' =
         forever accept
       where
         accept = do
             sock' <- acceptSocket sock >>= makeBuffered
-            remoteName <- doAccept (runPutBuffered sock') (runGetBuffered sock') handshakeData'
+            remoteName <- doAccept (runPutBuffered sock')
+                                   (runGetBuffered sock')
+                                   handshakeData'
             newConnection sock' nodeState (atom remoteName)
 
-register :: (MonadIO m) => LocalNode -> Term -> Pid -> m ()
+register :: (MonadLoggerIO m) => LocalNode -> Term -> Pid -> m ()
 register LocalNode{nodeState} name pid' = do
     mbox <- getMailboxForPid nodeState pid'
     putMailboxForName nodeState name mbox
 
-make_pid :: (MonadIO m) => LocalNode -> m Pid
+make_pid :: (MonadLoggerIO m) => LocalNode -> m Pid
 make_pid LocalNode{handshakeData = HandshakeData{name = Name{n_nodeName}},registration,nodeState} = do
     (id, serial) <- new_pid nodeState
     return $ pid n_nodeName id serial (getCreation registration)
 
-make_ref :: (MonadIO m) => LocalNode -> m Term
+make_ref :: (MonadLoggerIO m) => LocalNode -> m Term
 make_ref LocalNode{handshakeData = HandshakeData{name = Name{n_nodeName}},registration,nodeState} = do
     (refId0, refId1, refId2) <- new_ref nodeState
     return $ ref n_nodeName (getCreation registration) [ refId0, refId1, refId2 ]
 
-make_port :: (MonadIO m) => LocalNode -> m Term
+make_port :: (MonadLoggerIO m) => LocalNode -> m Term
 make_port LocalNode{handshakeData = HandshakeData{name = Name{n_nodeName}},registration,nodeState} = do
     id <- new_port nodeState
     return $ port n_nodeName id (getCreation registration)
 
-make_mailbox :: (MonadIO m) => LocalNode -> m Mailbox
+make_mailbox :: (MonadLoggerIO m) => LocalNode -> m Mailbox
 make_mailbox localNode@LocalNode{handshakeData = handshakeData@HandshakeData{nodeData},nodeState} = do
     self <- make_pid localNode
     queue <- liftIO $ newTQueueIO
@@ -165,7 +178,7 @@ newMailbox nodeState self queue connect =
                 liftIO $ atomically $ readTQueue queue
             }
 
-closeLocalNode :: (MonadIO m) => LocalNode -> m ()
+closeLocalNode :: (MonadLoggerIO m) => LocalNode -> m ()
 closeLocalNode LocalNode{registration,nodeState,acceptor} = do
     maybe (return ()) (closeBuffered . nr_sock) registration
     getConnectedNodes nodeState >>= mapM_ (liftIO . closeConnection . snd)

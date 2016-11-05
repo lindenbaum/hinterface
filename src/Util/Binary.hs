@@ -27,12 +27,12 @@ module Util.Binary
     , matchChar8
     ) where
 
-import qualified Data.ByteString      as BS
-import qualified Data.ByteString.Lazy as LBS
 import           Data.Binary.Get
 import           Data.Binary.Put
-import           Data.Word
+import qualified Data.ByteString      as BS
+import qualified Data.ByteString.Lazy as LBS
 import           Data.Char
+import           Data.Word
 
 import           Util.FloatCast
 
