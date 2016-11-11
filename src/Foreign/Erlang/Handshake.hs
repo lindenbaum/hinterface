@@ -1,5 +1,5 @@
 {-# LANGUAGE Rank2Types #-}
-{-# LANGUAGE Strict #-}
+{-# LANGUAGE Strict     #-}
 
 module Foreign.Erlang.Handshake
     ( HandshakeData(..)
@@ -12,9 +12,11 @@ module Foreign.Erlang.Handshake
     , ChallengeAck(..)
     ) where
 
-import           Control.Monad            ( unless )
+import           Control.Monad           ( unless, when )
+import           Util.IOExtra
+import           Data.Ix                 ( inRange )
 
-import qualified Data.ByteString          as BS
+import qualified Data.ByteString         as BS
 import           Data.Binary
 import           Data.Binary.Get
 import           Data.Binary.Put
@@ -54,7 +56,10 @@ instance Binary Name where
             putByteString n_nodeName
     get = do
         len <- getWord16be
-        (((), n_distVer, n_distFlags), l) <- getWithLength16be $ (,,) <$> matchChar8 nodeTypeR6 <*> get <*> get
+        (((), n_distVer, n_distFlags), l) <- getWithLength16be $
+                                                 (,,) <$> matchChar8 nodeTypeR6
+                                                      <*> get
+                                                      <*> get
         n_nodeName <- getByteString (fromIntegral (len - l))
         return Name { n_distVer, n_distFlags, n_nodeName }
 
@@ -123,7 +128,9 @@ instance Binary ChallengeReply where
             putByteString cr_digest
     get = do
         len <- getWord16be
-        (((), cr_challenge), l) <- getWithLength16be $ (,) <$> matchChar8 challengeReply <*> getWord32be
+        (((), cr_challenge), l) <- getWithLength16be $
+                                       (,) <$> matchChar8 challengeReply
+                                           <*> getWord32be
         cr_digest <- getByteString (fromIntegral (len - l))
         return ChallengeReply { cr_challenge, cr_digest }
 
@@ -143,46 +150,86 @@ instance Binary ChallengeAck where
         return ChallengeAck { ca_digest }
 
 --------------------------------------------------------------------------------
-doConnect :: (forall o. Binary o => o -> IO ()) -> (forall i. (Binary i) => IO i) -> HandshakeData -> IO ()
-doConnect send recv HandshakeData{name = name@Name{n_distVer = our_distVer},nodeData = NodeData{loVer,hiVer},cookie} = do
-    send name
+doConnect :: (MonadCatch m, MonadIO m, Exception e)
+          => (forall o. Binary o => o -> m ())
+          -> (forall i. (Binary i) => m i)
+          -> HandshakeData
+          -> m (Either e ())
+doConnect send recv HandshakeData{name,nodeData = NodeData{loVer,hiVer},cookie} =
+    try $ do
+        send name
+        do
+            her_status <- recv
+            when (her_status /= Ok) (throwM (BadHandshakeStatus her_status))
 
-    her_status <- recv
-    case her_status of
-        Ok -> return ()
-        _ -> fail $ "Bad status: " ++ show her_status
+        Challenge{c_distVer = her_distVer,c_challenge = her_challenge} <- recv
+        checkVersionRange her_distVer loVer hiVer
 
-    Challenge{c_distVer = her_distVer,c_distFlags = her_distFlags,c_challenge = her_challenge,c_nodeName = her_nodeName} <- recv
-    checkVersionRange her_distVer loVer hiVer
-    unless (our_distVer == her_distVer) (fail "Version mismatch")
+        our_challenge <- liftIO genChallenge
+        send ChallengeReply { cr_challenge = our_challenge
+                            , cr_digest = genDigest her_challenge cookie
+                            }
+        ChallengeAck{ca_digest = her_digest} <- recv
+        checkCookie her_digest our_challenge cookie
 
-    our_challenge <- genChallenge
-    send ChallengeReply { cr_challenge = our_challenge, cr_digest = genDigest her_challenge cookie }
+newtype BadHandshakeStatus = BadHandshakeStatus Status
+    deriving Show
 
-    ChallengeAck{ca_digest = her_digest} <- recv
-    checkCookie her_digest our_challenge cookie
+instance Exception BadHandshakeStatus
 
 --------------------------------------------------------------------------------
-doAccept :: (forall o. Binary o => o -> IO ()) -> (forall i. (Binary i) => IO i) -> HandshakeData -> IO BS.ByteString
-doAccept send recv HandshakeData{name = Name{n_distFlags,n_nodeName},nodeData = NodeData{loVer,hiVer},cookie} = do
-    Name{n_distVer = her_distVer,n_distFlags = her_distFlags,n_nodeName = her_nodeName} <- recv
-    checkVersionRange her_distVer loVer hiVer
+doAccept :: (MonadCatch m, MonadIO m)
+         => (forall o. Binary o => o -> m ()) -- TODO
+         -> (forall i. (Binary i) => m i)
+         -> HandshakeData
+         -> m (Either SomeException BS.ByteString)
+doAccept send recv HandshakeData{name = Name{n_distFlags,n_nodeName},nodeData = NodeData{loVer,hiVer},cookie} =
+    try $ do
+        Name{n_distVer = her_distVer,n_nodeName = her_nodeName} <- recv
+        checkVersionRange her_distVer loVer hiVer
 
-    send Ok
+        send Ok
 
-    our_challenge <- genChallenge
-    send Challenge { c_distVer = R6B, c_distFlags = n_distFlags, c_challenge = our_challenge, c_nodeName = n_nodeName }
+        our_challenge <- liftIO genChallenge
+        send Challenge { c_distVer = R6B
+                       , c_distFlags = n_distFlags
+                       , c_challenge = our_challenge
+                       , c_nodeName = n_nodeName
+                       }
 
-    ChallengeReply{cr_challenge = her_challenge,cr_digest = her_digest} <- recv
-    checkCookie her_digest our_challenge cookie
+        ChallengeReply{cr_challenge = her_challenge,cr_digest = her_digest} <- recv
+        checkCookie her_digest our_challenge cookie
 
-    send ChallengeAck { ca_digest = genDigest her_challenge cookie }
-    return her_nodeName
+        send ChallengeAck { ca_digest = genDigest her_challenge cookie }
+        return her_nodeName
 
-checkVersionRange :: DistributionVersion -> DistributionVersion -> DistributionVersion -> IO ()
-checkVersionRange her_distVer loVer hiVer =
-    unless (loVer <= her_distVer && her_distVer <= hiVer) (fail "Version out of range")
+checkVersionRange :: MonadThrow m
+                  => DistributionVersion
+                  -> DistributionVersion
+                  -> DistributionVersion
+                  -> m ()
+checkVersionRange herVersion lowVersion highVersion =
+    unless (inRange (lowVersion, highVersion) herVersion)
+           (throwM DistributionVersionMismatch { herVersion
+                                               , lowVersion
+                                               , highVersion
+                                               })
 
-checkCookie :: BS.ByteString -> Word32 -> BS.ByteString -> IO ()
+checkCookie :: MonadThrow m => BS.ByteString -> Word32 -> BS.ByteString -> m ()
 checkCookie her_digest our_challenge cookie =
-    unless (her_digest == genDigest our_challenge cookie) (fail "Cookie mismatch")
+    unless (her_digest == genDigest our_challenge cookie)
+           (throwM CookieMismatch)
+
+data DistributionVersionMismatch =
+      DistributionVersionMismatch { herVersion  :: DistributionVersion
+                                  , lowVersion  :: DistributionVersion
+                                  , highVersion :: DistributionVersion
+                                  }
+    deriving Show
+
+instance Exception DistributionVersionMismatch
+
+data CookieMismatch = CookieMismatch
+    deriving Show
+
+instance Exception CookieMismatch

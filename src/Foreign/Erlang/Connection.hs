@@ -1,14 +1,18 @@
-{-# LANGUAGE Strict #-}
+{-# LANGUAGE Strict              #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# OPTIONS -Wno-unused-do-bind #-}
+
 module Foreign.Erlang.Connection
-    ( Connection()
+    ( Connection(closeConnection)
     , newConnection
     , sendControlMessage
-    , closeConnection
     ) where
 
 import           Control.Monad
-import           Control.Concurrent
 import           Control.Concurrent.STM
+import qualified Control.Concurrent.Async      as A
 import           Util.BufferedIOx
 import           Util.IOExtra
 import           Foreign.Erlang.NodeState
@@ -17,87 +21,93 @@ import           Foreign.Erlang.ControlMessage
 import           Foreign.Erlang.Mailbox
 
 --------------------------------------------------------------------------------
-data Connection = Connection { sendQueue :: TQueue ControlMessage
-                             , onClose   :: IO ()
-                             }
+data Connection = MkConnection { sendQueue       :: TQueue ControlMessage
+                               , closeConnection :: IO ()
+                               }
 
 --------------------------------------------------------------------------------
-newConnection :: (BufferedIOx s) => s -> NodeState Pid Term Mailbox Connection -> Term -> IO Connection
+newConnection :: (MonadLoggerIO m, MonadCatch m, MonadBaseControl IO m, BufferedIOx s, Forall (Pure m))
+              => s
+              -> NodeState Pid Term Mailbox Connection
+              -> Term
+              -> m Connection
 newConnection sock nodeState name = do
-    (sendQueue, sendThread) <- (newSender sendLoop) sock
-    recvThread <- (newReceiver recvLoop (sendQueue, nodeState, name)) sock
-    let connection = Connection sendQueue (onClose sendThread recvThread)
-    putConnectionForNode nodeState name connection
-    return connection
+    sendQueue <- liftIO newTQueueIO
+    forkTransmitter sendQueue
   where
-    newSender :: (s -> (TQueue m) -> IO ()) -> s -> IO (TQueue m, ThreadId)
-    newSender f s = do
-        q <- newTQueueIO
-        t <- forkIO (f s q)
-        return (q, t)
-    newReceiver :: (s -> (TQueue m, r, n) -> IO ()) -> (TQueue m, r, n) -> s -> IO ThreadId
-    newReceiver f q s = do
-        t <- forkIO (f s q)
-        return t
-    onClose s r = do
-        removeConnectionForNode nodeState name
-        killThread s
-        killThread r
-        closeBuffered sock
+    forkTransmitter sendQueue = do
+        s <- async newSender
+        r <- async newReceiver
+        let connection = MkConnection sendQueue (stopTransmitter s r)
+        liftIO (putConnectionForNode nodeState name connection)
+        async (awaitStopAndCleanup s r)
+        return connection
+      where
+        newSender = sendLoop sock sendQueue
+        newReceiver = recvLoop sock sendQueue nodeState name
+        stopTransmitter s r = void (A.concurrently (A.cancel s) (A.cancel r))
+        awaitStopAndCleanup s r = do
+            waitCatch r
+            cancel s
+            tryAndLogAll (liftIO (closeBuffered sock))
+            liftIO (removeConnectionForNode nodeState name)
 
-sendControlMessage :: Connection -> ControlMessage -> IO ()
-sendControlMessage Connection{sendQueue} controlMessage = do
-    atomically $ writeTQueue sendQueue controlMessage
+-- liftIO $
+-- getConnectionForNode nodeState name >>=
+--     mapM_ closeConnection
+sendControlMessage :: MonadIO m => ControlMessage -> Connection -> m ()
+sendControlMessage controlMessage MkConnection{sendQueue} =
+    liftIO $
+        atomically $ writeTQueue sendQueue controlMessage
 
-closeConnection :: Connection -> IO ()
-closeConnection Connection{onClose} = do
-    onClose
-
---------------------------------------------------------------------------------
-sendLoop :: (BufferedIOx s) => s -> (TQueue ControlMessage) -> IO ()
+sendLoop :: (MonadCatch m, MonadLoggerIO m, BufferedIOx s)
+         => s
+         -> TQueue ControlMessage
+         -> m ()
 sendLoop sock sendQueue =
-    forever (send `catch` logX "send")
+    forever (tryAndLogIO send)
   where
-    send = do
+    send = liftIO $ do
         controlMessage <- atomically $ readTQueue sendQueue
         runPutBuffered sock controlMessage
 
-recvLoop :: (BufferedIOx s) => s -> (TQueue ControlMessage, NodeState Pid Term Mailbox Connection, Term) -> IO ()
-recvLoop sock (sendQueue, nodeState, name) = do
-    forever (recv `catch`
+recvLoop :: (MonadLoggerIO m, MonadCatch m, BufferedIOx s)
+         => s
+         -> TQueue ControlMessage
+         -> NodeState Pid Term Mailbox Connection
+         -> Term
+         -> m ()
+recvLoop sock sendQueue nodeState name =
+    forever (recv `catchAll`
                  (\x -> do
-                      logX "recv" x
-                      getConnectionForNode nodeState name >>= closeConnection
-                      throw x))
+                      logErrorShow (x, nodeState)
+                      throwM x))
   where
-    recv = do
-        controlMessage <- runGetBuffered sock
-        deliver controlMessage `catch` logX "deliver"
-    deliver controlMessage = do
+    recv = liftIO (runGetBuffered sock >>= either throwM deliver)
+    deliver controlMessage =
         case controlMessage of
-            TICK -> do
-                atomically $ writeTQueue sendQueue TICK
+            TICK -> atomically $ writeTQueue sendQueue TICK
             LINK fromPid toPid -> do
                 mailbox <- getMailboxForPid nodeState toPid
-                deliverLink mailbox fromPid
+                mapM_ (`deliverLink` fromPid) mailbox
             SEND toPid message -> do
                 mailbox <- getMailboxForPid nodeState toPid
-                deliverSend mailbox message
+                mapM_ (`deliverSend` message) mailbox
             EXIT fromPid toPid reason -> do
                 mailbox <- getMailboxForPid nodeState toPid
-                deliverExit mailbox fromPid reason
+                mapM_ (\mb -> deliverExit mb fromPid reason) mailbox
             UNLINK fromPid toPid -> do
                 mailbox <- getMailboxForPid nodeState toPid
-                deliverUnlink mailbox fromPid
-            NODE_LINK -> do
+                mapM_ (`deliverUnlink` fromPid) mailbox
+            NODE_LINK ->
                 -- FIXME
                 return ()
             REG_SEND fromPid toName message -> do
                 mailbox <- getMailboxForName nodeState toName
-                deliverRegSend mailbox fromPid message
+                mapM_ (\mb -> deliverRegSend mb fromPid message) mailbox
             GROUP_LEADER fromPid toPid -> do
                 mailbox <- getMailboxForPid nodeState toPid
-                deliverGroupLeader mailbox fromPid
+                mapM_ (`deliverGroupLeader` fromPid) mailbox
             EXIT2 fromPid toPid reason -> do
                 mailbox <- getMailboxForPid nodeState toPid
-                deliverExit2 mailbox fromPid reason
+                mapM_ (\mb -> deliverExit2 mb fromPid reason) mailbox

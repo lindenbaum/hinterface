@@ -9,7 +9,6 @@ import           Data.Binary
 import qualified Data.ByteString      as BS (ByteString)
 import qualified Data.ByteString.Lazy as LBS (ByteString)
 import           Util.Binary
-
 import           Util.IOExtra
 
 class BufferedIOx a where
@@ -18,17 +17,8 @@ class BufferedIOx a where
     writeBuffered :: a -> LBS.ByteString -> IO ()
     closeBuffered :: a -> IO ()
 
-runGetBuffered :: (BufferedIOx s, Binary a) => s -> IO a
-runGetBuffered = runGetSocket' get
-  where
-    runGetSocket' :: (BufferedIOx s) => Get a -> s -> IO a
-    runGetSocket' g s = (runGetSocket'' s g) >>= either (errorX userErrorType) (return)
-      where
-        runGetSocket'' :: (BufferedIOx s) => s -> Get a -> IO (Either String a)
-        runGetSocket'' = runGetA <$> readBuffered <*> unreadBuffered
+runGetBuffered :: (MonadIO m, BufferedIOx s, Binary a) => s -> m (Either BinaryGetError a)
+runGetBuffered s = runGetA (liftIO . readBuffered s) (liftIO . unreadBuffered s) get
 
-runPutBuffered :: (BufferedIOx s, Binary a) => s -> a -> IO ()
-runPutBuffered = (. put) . runPutSocket'
-  where
-    runPutSocket' :: (BufferedIOx s) => s -> Put -> IO ()
-    runPutSocket' = runPutA <$> writeBuffered
+runPutBuffered :: (MonadIO m, BufferedIOx s, Binary a) => s -> a -> m ()
+runPutBuffered s = runPutA (liftIO . writeBuffered s) . put

@@ -1,4 +1,5 @@
 {-# LANGUAGE Strict #-}
+
 module Foreign.Erlang.NodeData
     ( DistributionVersion(..)
     , matchDistributionVersion
@@ -14,12 +15,13 @@ import           Data.Binary
 import           Data.Binary.Put
 import           Data.Binary.Get
 import           Data.Bits
+import           Data.Ix
 
 import           Util.Binary
 
 --------------------------------------------------------------------------------
 data DistributionVersion = Zero | R4 | NeverUsed | R5C | R6 | R6B
-    deriving (Eq, Show, Enum, Bounded, Ord)
+    deriving (Eq, Show, Enum, Bounded, Ord, Ix)
 
 instance Binary DistributionVersion where
     put = putWord16be . fromIntegral . fromEnum
@@ -141,4 +143,10 @@ instance Binary NodeData where
         putLength16beByteString aliveName
         putLength16beByteString extra
     get = do
-        NodeData <$> getWord16be <*> get <*> get <*> get <*> get <*> getLength16beByteString <*> getLength16beByteString
+        NodeData <$> getWord16be
+                 <*> get
+                 <*> get
+                 <*> get
+                 <*> get
+                 <*> getLength16beByteString
+                 <*> getLength16beByteString

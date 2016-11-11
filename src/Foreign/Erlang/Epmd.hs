@@ -6,7 +6,7 @@ module Foreign.Erlang.Epmd
     , lookupNode
       -- * Registering nodes
     , registerNode
-    , NodeRegistration(..)
+    , NodeRegistration(nr_creation)
     ) where
 
 import           Data.Binary
@@ -44,7 +44,7 @@ data NamesRequest = NamesRequest
     deriving (Eq, Show)
 
 instance Binary NamesRequest where
-    put _ = putWithLength16be $ do
+    put _ = putWithLength16be $
         putWord8 names_req
     get = undefined
 
@@ -59,7 +59,9 @@ instance Binary NamesResponse where
     get = do
         epmdPortNo <- getWord32be
         nodeInfos <- getRemainingLazyByteString
-        return $ NamesResponse (fromIntegral epmdPortNo) (catMaybes (map nodeInfo (CL.lines nodeInfos)))
+        return $
+            NamesResponse (fromIntegral epmdPortNo)
+                          (catMaybes (map nodeInfo (CL.lines nodeInfos)))
       where
         nodeInfo :: CL.ByteString -> Maybe NodeInfo
         nodeInfo cl = do
@@ -68,13 +70,14 @@ instance Binary NamesResponse where
             return $ NodeInfo (CL.unpack name) (fromIntegral port)
 
 -- | List all registered nodes
-epmdNames :: BS.ByteString -- ^ hostname
-          -> IO NamesResponse
-epmdNames hostName = do
-    withBufferedSocket hostName $ sendRequest NamesRequest
+epmdNames :: (MonadMask m, MonadResource m)
+          => BS.ByteString -- ^ hostname
+          -> m NamesResponse
+epmdNames hostName = withBufferedSocket hostName $ sendRequest NamesRequest
 
 --------------------------------------------------------------------------------
-data LookupNodeRequest = LookupNodeRequest BS.ByteString
+newtype LookupNodeRequest =
+      LookupNodeRequest { _fromLookupNodeRequest :: BS.ByteString }
     deriving (Eq, Show)
 
 instance Binary LookupNodeRequest where
@@ -84,7 +87,8 @@ instance Binary LookupNodeRequest where
             putByteString alive
     get = undefined
 
-data LookupNodeResponse = LookupNodeResponse (Maybe NodeData)
+newtype LookupNodeResponse =
+      LookupNodeResponse { fromLookupNodeResponse :: Maybe NodeData }
     deriving (Eq, Show)
 
 instance Binary LookupNodeResponse where
@@ -93,20 +97,18 @@ instance Binary LookupNodeResponse where
                                  matchWord8 port_please2_resp
                                  result <- getWord8
                                  if result > 0
-                                     then do
-                                         return $ Nothing
-                                     else do
-                                         Just <$> get
+                                     then return Nothing
+                                     else Just <$> get
 
 -- | Lookup a node
-lookupNode :: BS.ByteString -- ^ alive
+lookupNode :: (MonadMask m, MonadResource m)
+           => BS.ByteString -- ^ alive
            -> BS.ByteString -- ^ hostname
-           -> IO NodeData
-lookupNode alive hostName = do
-    LookupNodeResponse r <- withBufferedSocket hostName $ sendRequest (LookupNodeRequest alive)
-    case r of
-        (Just n) -> return n
-        Nothing -> errorX doesNotExistErrorType (show alive)
+           -> m (Maybe NodeData)
+lookupNode alive hostName =
+    fromLookupNodeResponse <$> withBufferedSocket hostName
+                                                  (sendRequest $
+                                                       LookupNodeRequest alive)
 
 --------------------------------------------------------------------------------
 data RegisterNodeRequest = RegisterNodeRequest NodeData
@@ -128,46 +130,51 @@ instance Binary RegisterNodeResponse where
                                    matchWord8 alive2_resp
                                    result <- getWord8
                                    if result > 0
-                                       then do
-                                           return Nothing
-                                       else do
-                                           creation <- getWord16be
-                                           return (Just creation)
+                                       then return Nothing
+                                       else Just <$> getWord16be
 
-data NodeRegistration = NodeRegistration { nr_sock     :: BufferedSocket
-                                         , nr_creation :: Word16
-                                         }
+newtype NodeRegistration = NodeRegistration { nr_creation :: Word16 }
 
--- | Register a node
-registerNode :: NodeData -- ^ node
+newtype NodeAlreadyRegistered = NodeAlreadyRegistered NodeData
+    deriving (Show)
+
+instance Exception NodeAlreadyRegistered
+
+-- | Register a node with an epmd; as long as the TCP connection is open, the
+-- registration is considered valid.
+registerNode :: (MonadResource m, MonadLogger m, MonadMask m)
+             => NodeData -- ^ node
              -> BS.ByteString -- ^ hostName
-             -> IO NodeRegistration
-registerNode node hostName = do
-    sock <- connectBufferedSocket hostName
-    RegisterNodeResponse r <- sendRequest (RegisterNodeRequest node) sock
-    case r of
-        (Just creation) -> do
-            return $ NodeRegistration sock creation
-        Nothing -> do
-            closeBuffered sock
-            errorX alreadyExistsErrorType (show $ aliveName node)
+             -> (NodeRegistration -> m a) -- ^ action to execute while the TCP connection is alive
+             -> m a
+registerNode node hostName action =
+    withBufferedSocket hostName go
+  where
+    go sock = do
+        r@(RegisterNodeResponse mr) <- sendRequest (RegisterNodeRequest node)
+                                                   sock
+        logInfoShow r
+        when (isNothing mr) (throwM (NodeAlreadyRegistered node))
+        action (NodeRegistration (fromJust mr))
 
---------------------------------------------------------------------------------
-sendRequest :: (BufferedIOx s, Binary a, Binary b) => a -> s -> IO b
+sendRequest :: (MonadMask m, MonadIO m, BufferedIOx s, Binary a, Binary b)
+            => a
+            -> s
+            -> m b
 sendRequest req sock = do
-    runPutBuffered sock req
-    runGetBuffered sock
+    liftIO $ runPutBuffered sock req
+    either throwM return =<< runGetBuffered sock
 
-connectBufferedSocket :: BS.ByteString -- ^ hostName
-                      -> IO BufferedSocket
-connectBufferedSocket hostName = do
-    connectSocket hostName epmdPort >>= makeBuffered
+withBufferedSocket :: (MonadIO m, MonadMask m)
+                   => BS.ByteString -- ^ hostName
+                   -> (BufferedSocket -> m b)
+                   -> m b
+withBufferedSocket hostName =
+    bracket (liftIO $ connectBufferedSocket hostName) (liftIO . closeBuffered)
 
-withBufferedSocket ::  BS.ByteString -- ^ hostName
-                   -> (BufferedSocket -> IO b)
-                   -> IO b
-withBufferedSocket hostName f = do
-    sock <- connectBufferedSocket hostName
-    res <- f sock
-    closeBuffered sock
-    return res
+connectBufferedSocket :: (MonadIO m)
+                      => BS.ByteString -- ^ hostName
+                      -> m BufferedSocket
+connectBufferedSocket hostName =
+    liftIO $
+        connectSocket hostName epmdPort >>= makeBuffered
