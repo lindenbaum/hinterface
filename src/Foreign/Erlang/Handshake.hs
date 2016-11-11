@@ -150,11 +150,11 @@ instance Binary ChallengeAck where
         return ChallengeAck { ca_digest }
 
 --------------------------------------------------------------------------------
-doConnect :: (MonadCatch m, MonadIO m, Exception e)
+doConnect :: (MonadCatch m, MonadIO m)
           => (forall o. Binary o => o -> m ())
           -> (forall i. (Binary i) => m i)
           -> HandshakeData
-          -> m (Either e ())
+          -> m (Either SomeException ())
 doConnect send recv HandshakeData{name,nodeData = NodeData{loVer,hiVer},cookie} =
     try $ do
         send name

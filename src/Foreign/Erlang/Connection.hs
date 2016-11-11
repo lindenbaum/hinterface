@@ -1,7 +1,7 @@
 {-# LANGUAGE Strict              #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeFamilies        #-}
 {-# OPTIONS -Wno-unused-do-bind #-}
 
 module Foreign.Erlang.Connection
@@ -38,19 +38,22 @@ newConnection sock nodeState name = do
     forkTransmitter sendQueue = do
         s <- async newSender
         r <- async newReceiver
-        let connection = MkConnection sendQueue (stopTransmitter s r)
-        liftIO (putConnectionForNode nodeState name connection)
-        async (awaitStopAndCleanup s r)
-        return connection
+        registerConnection s r
       where
         newSender = sendLoop sock sendQueue
-        newReceiver = recvLoop sock sendQueue nodeState name
-        stopTransmitter s r = void (A.concurrently (A.cancel s) (A.cancel r))
-        awaitStopAndCleanup s r = do
-            waitCatch r
-            cancel s
-            tryAndLogAll (liftIO (closeBuffered sock))
-            liftIO (removeConnectionForNode nodeState name)
+        newReceiver = recvLoop sock sendQueue nodeState
+        registerConnection s r = do
+            let connection = MkConnection sendQueue stopTransmitter
+            liftIO (putConnectionForNode nodeState name connection)
+            async awaitStopAndCleanup
+            return connection
+          where
+            stopTransmitter = void (A.concurrently (A.cancel s) (A.cancel r))
+            awaitStopAndCleanup = do
+                waitCatch r
+                cancel s
+                tryAndLogAll (liftIO (closeBuffered sock))
+                liftIO (removeConnectionForNode nodeState name)
 
 -- liftIO $
 -- getConnectionForNode nodeState name >>=
@@ -75,9 +78,8 @@ recvLoop :: (MonadLoggerIO m, MonadCatch m, BufferedIOx s)
          => s
          -> TQueue ControlMessage
          -> NodeState Pid Term Mailbox Connection
-         -> Term
          -> m ()
-recvLoop sock sendQueue nodeState name =
+recvLoop sock sendQueue nodeState =
     forever (recv `catchAll`
                  (\x -> do
                       logErrorShow (x, nodeState)

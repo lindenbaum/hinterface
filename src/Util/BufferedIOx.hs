@@ -3,6 +3,7 @@ module Util.BufferedIOx
     ( BufferedIOx(..)
     , runGetBuffered
     , runPutBuffered
+    , module Util.Binary
     ) where
 
 import           Data.Binary
