@@ -24,7 +24,6 @@ import           Control.Monad
 import           Control.Monad.Trans.Maybe            ( MaybeT(..), runMaybeT )
 import           Control.Monad.RWS.Strict
 import           Control.Concurrent.STM
-import           Control.Concurrent.Async.Lifted.Safe
 import           Control.Monad.Base
 import qualified Data.ByteString.Char8                as CS
 import           Data.Char
@@ -45,11 +44,13 @@ import           Foreign.Erlang.Connection
 import           Foreign.Erlang.Mailbox
 
 -- API:
+
 runNodeT :: forall m a.
          (MonadResource m, MonadThrow m, MonadMask m, MonadLogger m, MonadLoggerIO m, MonadIO m, Forall (Pure m))
          => LocalNodeConfig
          -> NodeT m a
          -> m a
+
 data LocalNodeConfig = LocalNodeConfig { aliveName :: String
                                        , hostName  :: String
                                        , cookie    :: String
@@ -57,6 +58,75 @@ data LocalNodeConfig = LocalNodeConfig { aliveName :: String
     deriving Show
 
 -- IMPLEMENTATION:
+
+class MonadNodeClass m where
+    askLocalNode :: m LocalNode
+    askNodeRegistration :: m NodeRegistration
+
+newtype NodeT m a = NodeT { unNodeT :: RWST RegisteredNode () () m a }
+    deriving (Functor, Applicative, Monad, MonadCatch, MonadThrow, MonadMask, MonadLogger, MonadIO)
+
+deriving instance (MonadBase IO (NodeT m), MonadResource m) =>
+         MonadResource (NodeT m)
+
+deriving instance (MonadBase b (NodeT m)) =>
+         MonadResource (NodeT m)
+
+data LocalNode = LocalNode { handshakeData  :: HandshakeData
+                           , nodeState      :: NodeState Pid Term Mailbox Connection
+                           , acceptorSocket :: Socket
+                           }
+
+data RegisteredNode = RegisteredNode { localNode        :: LocalNode
+                                     , nodeRegistration :: NodeRegistration
+                                     }
+
+instance Monad m =>
+         MonadNodeClass (NodeT m) where
+    askLocalNode = NodeT (asks localNode)
+    askNodeRegistration = NodeT (asks nodeRegistration)
+
+askCreation :: (Monad m) => NodeT m Word8
+askCreation = fromIntegral . nr_creation <$> askNodeRegistration
+
+askNodeState :: (Monad m) => NodeT m (NodeState Pid Term Mailbox Connection)
+askNodeState = nodeState <$> askLocalNode
+
+askNodeName :: (Monad m) => NodeT m CS.ByteString
+askNodeName = n_nodeName . name . handshakeData <$> askLocalNode
+
+make_pid :: (MonadIO m, Monad m) => NodeT m Pid
+make_pid = do
+    name <- askNodeName
+    state <- askNodeState
+    (id, serial) <- liftIO (new_pid state)
+    cr <- askCreation
+    return (pid name id serial cr)
+
+register_pid :: (MonadIO m, Monad m) => Term -> Pid -> NodeT m Bool
+register_pid name pid' = do
+    state <- askNodeState
+    liftIO (do
+                mbox <- getMailboxForPid state pid'
+                mapM_ (putMailboxForName state name) mbox
+                return (isJust mbox))
+
+make_ref :: (MonadIO m, Monad m) => NodeT m Term
+make_ref = do
+    state <- askNodeState
+    name <- askNodeName
+    (refId0, refId1, refId2) <- liftIO (new_ref state)
+    cr <- askCreation
+    return (ref name cr [ refId0, refId1, refId2 ])
+
+make_port :: (MonadIO m, Monad m) => NodeT m Term
+make_port = do
+    name <- askNodeName
+    state <- askNodeState
+    id <- liftIO (new_port state)
+    cr <- askCreation
+    return $ port name id cr
+
 runNodeT LocalNodeConfig{aliveName,hostName,cookie} NodeT{unNodeT} = do
     requireM "(aliveName /= \"\")" (aliveName /= "")
     requireM "(hostName /= \"\")" (hostName /= "")
@@ -94,7 +164,7 @@ runNodeT LocalNodeConfig{aliveName,hostName,cookie} NodeT{unNodeT} = do
 
     acceptRegisterAndRun :: LocalNode -> m a
     acceptRegisterAndRun localNode@LocalNode{acceptorSocket,handshakeData = hsn@HandshakeData{nodeData},nodeState} =
-        withAsync accept (\accepted -> (link accepted >> registerAndRun))
+        withAsync accept (\accepted -> link accepted >> registerAndRun)
       where
         accept = forever (bracketOnErrorLog (liftIO (acceptSocket acceptorSocket >>=
                                                          makeBuffered))
@@ -120,82 +190,44 @@ runNodeT LocalNodeConfig{aliveName,hostName,cookie} NodeT{unNodeT} = do
         cs <- liftIO $ getConnectedNodes nodeState
         mapM_ (closeConnection . snd) cs
 
-newtype NodeT m a = NodeT { unNodeT :: RWST (RegisteredNode m) () () m a }
-    deriving (Functor, Applicative, Monad, MonadCatch, MonadThrow, MonadMask, MonadLogger, MonadIO)
-
-deriving instance (MonadBase IO (NodeT m), MonadResource m) =>
-         MonadResource (NodeT m)
-
-data LocalNode = LocalNode { handshakeData  :: HandshakeData
-                           , nodeState      :: NodeState Pid Term Mailbox Connection
-                           , acceptorSocket :: Socket
-                           }
-
-data RegisteredNode = RegisteredNode { localNode        :: LocalNode
-                                     , nodeRegistration :: NodeRegistration
-                                     }
-
-
 splitNodeName :: CS.ByteString -> (CS.ByteString, CS.ByteString)
 splitNodeName a = case CS.split '@' a of
     [ alive, host ] -> (alive, host)
     _ -> error $ "Illegal node name: " ++ show a
 
-register :: LocalNode -> Term -> Pid -> IO ()
-register LocalNode{nodeState} name pid' = do
-    mbox <- getMailboxForPid nodeState pid'
-    mapM_ (putMailboxForName nodeState name) mbox
-
-make_pid :: LocalNode -> NodeRegistration -> IO Pid
-make_pid LocalNode{handshakeData = HandshakeData{name = Name{n_nodeName}},nodeState} registration = do
-    (id, serial) <- new_pid nodeState
-    return $ pid n_nodeName id serial (getCreation registration)
-
-make_ref :: LocalNode -> NodeRegistration -> IO Term
-make_ref LocalNode{handshakeData = HandshakeData{name = Name{n_nodeName}},nodeState} registration = do
-    (refId0, refId1, refId2) <- new_ref nodeState
-    return $
-        ref n_nodeName (getCreation registration) [ refId0, refId1, refId2 ]
-
-make_port :: LocalNode -> NodeRegistration -> IO Term
-make_port LocalNode{handshakeData = HandshakeData{name = Name{n_nodeName}},nodeState} registration = do
-    id <- new_port nodeState
-    return $ port n_nodeName id (getCreation registration)
-
-getOrCreateConnection :: (MonadMask m, MonadBaseControl IO m, MonadResource m, MonadLoggerIO m, MonadIO m, Forall (Pure m))
+getOrCreateConnection :: (MonadMask m, MonadBaseControl IO m, MonadResource m, MonadLoggerIO m, MonadIO m)
                       => CS.ByteString
-                      -> Term
                       -> NodeT m (Maybe Connection)
-getOrCreateConnection remoteName nodeName = do
-  nodeState <- askNodeState
-  runMaybeT getOrCreate nodeState
-      where
-        getOrCreate =
-            MaybeT (getConnectionForNode nodeState nodeName) <|>
-                (do
-                     n <- MaybeT (lookupNode remoteAlive remoteHost) <|>
-                              warnAndReturn
-                     create n)
+getOrCreateConnection remoteName =
+  getExistingConnection >>= maybe lookupAndConnect (return . Just)
+  where
+    getExistingConnection = do
+      nodeName <- atom <$> askNodeName
+      nodeState <- askNodeState
+      getConnectionForNode nodeState nodeName
+
+    lookupAndConnect = lookupNode remoteAlive remoteHost >>= maybe warnNotFound connect
           where
             (remoteAlive, remoteHost) = splitNodeName remoteName
-            warnAndReturn = MaybeT $ do
+            warnNotFound = do
                 logWarnStr
-                    $ printf "Connection failed: Node '%s' not found on '%s'."
+                    (printf "Connection failed: Node '%s' not found on '%s'."
                              (CS.unpack remoteAlive)
-                             (CS.unpack remoteHost)
+                             (CS.unpack remoteHost))
                 return Nothing
-            create NodeData{portNo = remotePort} =
-                MaybeT $
-                    bracketOnErrorLog (liftIO (connectSocket remoteHost
-                                                             remotePort >>=
-                                                   makeBuffered))
-                                      cleanup
-                                      go
+            connect NodeData{portNo = remotePort} =
+               bracketOnErrorLog (liftIO (connectSocket remoteHost
+                                           remotePort >>=
+                                           makeBuffered))
+               cleanup
+               go
               where
                 cleanup sock = do
                     liftIO (closeBuffered sock)
                     return Nothing
                 go sock = Just <$> do
+                                   nodeState <- askNodeState
+                                   LocalNode{handshakeData} <- askLocalNode
                                    doConnect (runPutBuffered sock)
                                              (throwLeftM (runGetBuffered sock))
                                              handshakeData
@@ -204,39 +236,34 @@ getOrCreateConnection remoteName nodeName = do
                                                  (atom remoteName)
 
 
-make_mailbox :: forall m.
-             (MonadResource m, MonadLoggerIO m, MonadIO m)
-             => LocalNode
-             -> NodeRegistration
-             -> m Mailbox
-make_mailbox localNode@LocalNode{handshakeData = handshakeData@HandshakeData{nodeData},nodeState} registration =
+make_mailbox :: (MonadResource m, MonadLoggerIO m, MonadIO m)
+             => NodeT m Mailbox
+make_mailbox =
     do
-        self <- make_pid localNode registration
-        msgQueue <- newTQueueIO
+        self <- make_pid
+        msgQueue <- liftIO newTQueueIO
         let mailbox = MkMailbox {self, msgQueue}
         nodeState <- askNodeState
-        putMailboxForPid nodeState self mailbox
+        liftIO (putMailboxForPid nodeState self mailbox)
         return mailbox
 
-send :: MailBox -> Pid -> Term -> NodeT m ()
-send MkMailbox{getPid,msgQueue} toPid message =
-    void $
-        runMaybeT $ do
-            let nodeName = node (toTerm toPid)
-            c <- connect (atom_name nodeName) nodeName
-            lift (sendControlMessage (SEND toPid message) c)
+-- send :: (MonadResource m, MonadLoggerIO m, MonadIO m)
+--              => MailBox -> Pid -> Term -> NodeT m ()
+-- send MkMailbox{self,msgQueue} toPid message =
+--     void $
+--         runMaybeT $ do
+--             let nodeName = node (toTerm toPid)
+--             c <- connect (atom_name nodeName) nodeName
+--             lift (sendControlMessage (SEND toPid message) c)
 
-sendReg :: MailBox -> Term -> Term -> Term -> NodeT m ()
-sendReg MkMailbox{getPid,msgQueue} =
- void $
-  runMaybeT $ do
-  c <- connect (atom_name nodeName)
-       nodeName
-       lift (sendControlMessage (REG_SEND self
-                                  regName
-                                  message)
-              c)
-
-
-getCreation :: NodeRegistration -> Word8
-getCreation = fromIntegral . nr_creation
+-- sendReg :: (MonadResource m, MonadLoggerIO m, MonadIO m)
+--   => MailBox -> Term -> Term -> Term -> NodeT m ()
+-- sendReg MkMailbox{self,msgQueue} =
+--  void $
+--   runMaybeT $ do
+--   c <- connect (atom_name nodeName)
+--        nodeName
+--        lift (sendControlMessage (REG_SEND self
+--                                   regName
+--                                   message)
+--               c)

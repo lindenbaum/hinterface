@@ -14,46 +14,39 @@ module Foreign.Erlang.Mailbox
     ) where
 
 import           Foreign.Erlang.Term
+import           Control.Concurrent.STM
 
 data Mailbox = MkMailbox { self     :: Pid
                          , msgQueue :: TQueue Term
                          }
 
-deliverLink :: MailBox -> Pid -> IO ()
+deliverLink :: Mailbox -> Pid -> IO ()
 deliverLink = undefined
 
-deliverSend :: MailBox -> Term -> IO ()
+deliverSend :: Mailbox -> Term -> IO ()
 deliverSend MkMailbox{msgQueue} =
     atomically . writeTQueue msgQueue
 
-deliverExit :: MailBox -> Pid -> Term -> IO ()
-deliverExit MkMailbox{getPid,msgQueue} =
+deliverExit :: Mailbox -> Pid -> Term -> IO ()
+deliverExit =
     undefined
 
-deliverUnlink :: MailBox -> Pid -> IO ()
-deliverUnlink MkMailbox{getPid,msgQueue} =
+deliverUnlink :: Mailbox -> Pid -> IO ()
+deliverUnlink =
     undefined
 
-deliverRegSend :: MailBox -> Pid -> Term -> IO ()
-deliverRegSend MkMailbox{getPid,msgQueue} _fromPid message =
+deliverRegSend :: Mailbox -> Pid -> Term -> IO ()
+deliverRegSend MkMailbox{msgQueue} _fromPid message =
     atomically $ writeTQueue msgQueue message
 
-deliverGroupLeader :: MailBox -> Pid -> IO ()
-deliverGroupLeader MkMailbox{getPid,msgQueue} =
+deliverGroupLeader :: Mailbox -> Pid -> IO ()
+deliverGroupLeader =
     undefined
 
-deliverExit2 :: MailBox -> Pid -> Term -> IO ()
-deliverExit2 MkMailbox{getPid,msgQueue} =
+deliverExit2 :: Mailbox -> Pid -> Term -> IO ()
+deliverExit2 =
     undefined
 
-receive :: MailBox -> IO Term
+receive :: Mailbox -> IO Term
 receive MkMailbox{msgQueue} =
     atomically (readTQueue msgQueue)
-
-
--- TODO move into its own module
-class MonadNode m where
-  make_pid :: m Pid
-  make_ref :: m Term
-  make_port :: m Term
-  make_mailbox :: m Mailbox

@@ -46,7 +46,7 @@ import           Control.Monad.Logger.CallStack       as X ( logError, logInfo )
 import           Control.Monad.Trans.Control          as X
 import           Control.Monad.Trans.Resource         as X
 import           Control.Concurrent.Lifted            as X
-import           Control.Concurrent.Async.Lifted.Safe as X
+import           Control.Concurrent.Async.Lifted      as X
 import           Text.Printf                          as X
 import           Data.Text                            ( Text, pack )
 import           GHC.Stack

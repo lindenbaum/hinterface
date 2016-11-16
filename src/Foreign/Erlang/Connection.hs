@@ -26,7 +26,7 @@ data Connection = MkConnection { sendQueue       :: TQueue ControlMessage
                                }
 
 --------------------------------------------------------------------------------
-newConnection :: (MonadLoggerIO m, MonadCatch m, MonadBaseControl IO m, BufferedIOx s, Forall (Pure m))
+newConnection :: (MonadLoggerIO m, MonadCatch m, MonadBaseControl IO m, BufferedIOx s)
               => s
               -> NodeState Pid Term Mailbox Connection
               -> Term
