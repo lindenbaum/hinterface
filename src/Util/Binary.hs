@@ -1,5 +1,6 @@
 module Util.Binary
     ( runGetA
+    , BinaryGetError(..)
     , runPutA
     , putFloatbe
     , putFloatle
@@ -27,30 +28,42 @@ module Util.Binary
     , matchChar8
     ) where
 
-import qualified Data.ByteString      as BS
-import qualified Data.ByteString.Lazy as LBS
 import           Data.Binary.Get
 import           Data.Binary.Put
-import           Data.Word
+import qualified Data.ByteString      as BS
+import qualified Data.ByteString.Lazy as LBS
 import           Data.Char
+import           Data.Int             (Int64)
+import           Data.Word
 
 import           Util.FloatCast
+import           Util.IOExtra
 
 --------------------------------------------------------------------------------
-runGetA :: (Monad m) => (Int -> m BS.ByteString) -> (BS.ByteString -> m ()) -> Get a -> m (Either String a) -- FIXME improve String error type
+runGetA :: (Monad m)
+        => (Int -> m BS.ByteString)
+        -> (BS.ByteString -> m ())
+        -> Get a
+        -> m (Either BinaryGetError a)
 runGetA readA unreadA getA =
     feed (runGetIncremental getA) (readA 2048)
   where
-    --feed :: Decoder a -> m BS.ByteString -> m a
     feed (Done unused _pos output) _input = do
         unreadA unused
         return $ Right output
     feed (Fail unused pos msg) _input = do
         unreadA unused
-        return $ Left $ "runGetA: pos " ++ show pos ++ ": " ++ show msg
+        return $ Left $ BinaryGetError pos msg
     feed (Partial k) input = do
         chunk <- input
         if BS.null chunk then feed (k Nothing) input else feed (k (Just chunk)) input
+
+data BinaryGetError = BinaryGetError { position :: Int64
+                                     , message  :: String
+                                     }
+    deriving Show
+
+instance Exception BinaryGetError
 
 runPutA :: (LBS.ByteString -> m ()) -> Put -> m ()
 runPutA = (. runPut)

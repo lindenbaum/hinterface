@@ -1,22 +1,22 @@
-{-# LANGUAGE Rank2Types #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE Rank2Types       #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Foreign.Erlang.HandshakeSpec ( spec ) where
 
 import           Test.Hspec
---import Test.Hspec.QuickCheck
 import           Test.QuickCheck
-import           Control.Exception
-import qualified Data.ByteString           as BS
-import qualified Data.ByteString.Char8     as CS
-import qualified Data.ByteString.Lazy      as LBS
+import qualified Data.ByteString          as BS
+import qualified Data.ByteString.Char8    as CS
+import qualified Data.ByteString.Lazy     as LBS
 import           Data.IORef
 import           Data.Binary
-import           Data.List                 ( nub, sort )
+import           Data.List                ( nub, sort )
 import           Util.IOExtra
 import           Util.BufferedIOx
 import           Foreign.Erlang.NodeData
 import           Foreign.Erlang.Handshake
+import           Control.Monad.Logger     ( MonadLogger(monadLoggerLog) )
 
 spec :: Spec
 spec = do
@@ -30,7 +30,8 @@ spec = do
                 return $ (decode . encode) a `shouldBe` a
         it "encodes as expected" $
             encode (Name R6B (DistributionFlags []) "name") `shouldBe`
-                withLength16 ("n" `LBS.append` LBS.pack [ 0, 5, 0, 0, 0, 0 ] `LBS.append` "name")
+                withLength16 ("n" `LBS.append` LBS.pack [ 0, 5, 0, 0, 0, 0 ] `LBS.append`
+                                  "name")
 
     describe "Status" $ do
         it "decode . encode = id" $
@@ -45,7 +46,8 @@ spec = do
         it "Nok encodes to \"nok\"" $
             encode Nok `shouldBe` withLength16 ("s" `LBS.append` "nok")
         it "NotAllowed encodes to \"not_allowed\"" $
-            encode NotAllowed `shouldBe` withLength16 ("s" `LBS.append` "not_allowed")
+            encode NotAllowed `shouldBe`
+                withLength16 ("s" `LBS.append` "not_allowed")
         it "Alive encodes to \"alive\"" $
             encode Alive `shouldBe` withLength16 ("s" `LBS.append` "alive")
 
@@ -88,14 +90,22 @@ spec = do
                                     , aliveName = "alive"
                                     , extra = ""
                                     }
-                handshakeData = HandshakeData { name, nodeData, cookie = "cookie" }
+                handshakeData = HandshakeData { name
+                                              , nodeData
+                                              , cookie = "cookie"
+                                              }
 
-            her_nodeName <- do buffer0 <- newBuffer
-                               buffer1 <- newBuffer
+            her_nodeName <- do
+                                buffer0 <- newBuffer
+                                buffer1 <- newBuffer
 
-                               _ <- forkIO $
-                                        doConnect (runPutBuffered buffer0) (runGetBuffered buffer1) handshakeData
-                               doAccept (runPutBuffered buffer1) (runGetBuffered buffer0) handshakeData
+                                _ <- fork $
+                                         doConnect (runPutBuffered buffer0)
+                                                   (runGetBuffered buffer1)
+                                                   handshakeData
+                                doAccept (runPutBuffered buffer1)
+                                         (runGetBuffered buffer0)
+                                         handshakeData
             her_nodeName `shouldBe`
                 "alive@localhost.localdomain"
 
@@ -112,7 +122,10 @@ spec = do
                                      , aliveName = "alive1"
                                      , extra = ""
                                      }
-                handshakeData1 = HandshakeData { name = name1, nodeData = nodeData1, cookie = "cookie1" }
+                handshakeData1 = HandshakeData { name = name1
+                                               , nodeData = nodeData1
+                                               , cookie = "cookie1"
+                                               }
                 name2 = Name { n_distVer = R6B
                              , n_distFlags = DistributionFlags []
                              , n_nodeName = "alive2@localhost.localdomain"
@@ -125,23 +138,35 @@ spec = do
                                      , aliveName = "alive2"
                                      , extra = ""
                                      }
-                handshakeData2 = HandshakeData { name = name2, nodeData = nodeData2, cookie = "cookie2" }
-            error_message <-
-                                 (do
-                                      buffer0 <- newBuffer
-                                      buffer1 <- newBuffer
+                handshakeData2 = HandshakeData { name = name2
+                                               , nodeData = nodeData2
+                                               , cookie = "cookie2"
+                                               }
+            error_message <- (do
+                                  buffer0 <- newBuffer
+                                  buffer1 <- newBuffer
 
-                                      _ <- forkIO $
-                                               doConnect (runPutBuffered buffer0)
-                                                         (runGetBuffered buffer1)
-                                                         handshakeData1
-                                      doAccept (runPutBuffered buffer1) (runGetBuffered buffer0) handshakeData2) `catch`
-                                     (return . CS.pack . show @IOException)
+                                  _ <- fork $
+                                           doConnect (runPutBuffered buffer0)
+                                                     (runGetBuffered buffer1)
+                                                     handshakeData1
+                                  doAccept (runPutBuffered buffer1)
+                                           (runGetBuffered buffer0)
+                                           handshakeData2) `catch`
+                                 (return .
+                                      CS.pack .
+                                          (displayException :: SomeException
+                                                            -> String))
             error_message `shouldBe`
-                "user error (Cookie mismatch)"
+                "CookieMismatch"
+
+instance MonadLogger IO where
+    monadLoggerLog _ _ _ _ =
+        return ()
 
 withLength16 :: LBS.ByteString -> LBS.ByteString
-withLength16 bytes = encode (fromIntegral (LBS.length bytes) :: Word16) `LBS.append` bytes
+withLength16 bytes = encode (fromIntegral (LBS.length bytes) :: Word16) `LBS.append`
+    bytes
 
 newtype Buffer = Buffer { bufIO :: IORef BS.ByteString }
 
@@ -152,8 +177,7 @@ instance BufferedIOx Buffer where
     closeBuffered = const (return ())
 
 newBuffer :: IO Buffer
-newBuffer =
-    Buffer <$> newIORef BS.empty
+newBuffer = Buffer <$> newIORef BS.empty
 
 readBuffer :: Buffer -> Int -> IO BS.ByteString
 readBuffer buffer@Buffer{bufIO} len
@@ -167,11 +191,13 @@ readBuffer buffer@Buffer{bufIO} len
                                            in
                                                if len > bufLen
                                                then (BS.empty, (Just buf))
-                                               else let (buf0, buf1) = BS.splitAt len buf
+                                               else let (buf0, buf1) = BS.splitAt len
+                                                                                  buf
                                                     in
                                                         (buf1, Just buf0)) >>=
               maybe (readBuffer buffer len) (return)
 
 writeBuffer :: Buffer -> LBS.ByteString -> IO ()
-writeBuffer Buffer{bufIO} bytes =
-    do atomicModifyIORef' bufIO (\buf -> (buf `BS.append` (LBS.toStrict bytes), ()))
+writeBuffer Buffer{bufIO} bytes = do
+    atomicModifyIORef' bufIO
+                       (\buf -> (buf `BS.append` (LBS.toStrict bytes), ()))
