@@ -13,8 +13,6 @@ module Foreign.Erlang.Mailbox
     , receive
     ) where
 
-import           Util.IOExtra
-
 import           Foreign.Erlang.Term
 import           Control.Concurrent.STM
 

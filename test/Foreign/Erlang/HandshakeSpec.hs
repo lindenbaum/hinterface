@@ -16,7 +16,8 @@ import           Util.IOExtra
 import           Util.BufferedIOx
 import           Foreign.Erlang.NodeData
 import           Foreign.Erlang.Handshake
-import           Control.Monad.Logger     ( MonadLogger(monadLoggerLog) )
+import           Control.Monad.Logger     ( MonadLogger(monadLoggerLog)
+                                          , runStderrLoggingT )
 
 spec :: Spec
 spec = do
@@ -161,8 +162,8 @@ spec = do
                 "CookieMismatch"
 
 instance MonadLogger IO where
-    monadLoggerLog _ _ _ _ =
-        return ()
+    monadLoggerLog _a _b _c _d =
+        runStderrLoggingT $ monadLoggerLog _a _b _c _d
 
 withLength16 :: LBS.ByteString -> LBS.ByteString
 withLength16 bytes = encode (fromIntegral (LBS.length bytes) :: Word16) `LBS.append`
