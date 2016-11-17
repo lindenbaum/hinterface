@@ -1,5 +1,5 @@
 name:                hinterface
-version:             0.4.0.0
+version:             0.5.0.0
 synopsis:            Haskell / Erlang interoperability library
 description:         Please see README.md
 homepage:            https://github.com/LTI2000/hinterface
@@ -7,7 +7,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              Timo Koepke, Sven Heyll
 maintainer:          timo.koepke@googlemail.com, sven.heyll@gmail.com
-copyright:           2016 Timo Koepke
+copyright:           2016 Timo Koepke, Sven Heyll
 category:            Language
 build-type:          Simple
 -- extra-source-files:
@@ -73,6 +73,7 @@ test-suite hinterface-test
                      , bytestring
                      , hinterface
                      , hspec
+                     , monad-logger >= 0.3 && < 0.4
                      , transformers
   other-modules:       Foreign.Erlang.NodeDataSpec
                      , Foreign.Erlang.HandshakeSpec

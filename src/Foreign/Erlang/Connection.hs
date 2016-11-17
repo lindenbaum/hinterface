@@ -26,7 +26,7 @@ data Connection = MkConnection { sendQueue       :: TQueue ControlMessage
                                }
 
 --------------------------------------------------------------------------------
-newConnection :: (MonadLoggerIO m, MonadCatch m, MonadBaseControl IO m, BufferedIOx s)
+newConnection :: (MonadLoggerIO m, MonadMask m, MonadBaseControl IO m, BufferedIOx s)
               => s
               -> NodeState Pid Term Mailbox Connection
               -> Term
@@ -50,7 +50,7 @@ newConnection sock nodeState name = do
           where
             stopTransmitter = void (A.concurrently (A.cancel s) (A.cancel r))
             awaitStopAndCleanup = do
-                waitCatch r
+                (_ :: Either SomeException ()) <- waitCatch r
                 cancel s
                 tryAndLogAll (liftIO (closeBuffered sock))
                 liftIO (removeConnectionForNode nodeState name)
@@ -74,7 +74,7 @@ sendLoop sock sendQueue =
         controlMessage <- atomically $ readTQueue sendQueue
         runPutBuffered sock controlMessage
 
-recvLoop :: (MonadLoggerIO m, MonadCatch m, BufferedIOx s)
+recvLoop :: (MonadLoggerIO m, MonadCatch m, BufferedIOx s, MonadMask m)
          => s
          -> TQueue ControlMessage
          -> NodeState Pid Term Mailbox Connection
@@ -85,7 +85,7 @@ recvLoop sock sendQueue nodeState =
                       logErrorShow (x, nodeState)
                       throwM x))
   where
-    recv = liftIO (runGetBuffered sock >>= either throwM deliver)
+    recv = runGetBuffered sock >>= liftIO . deliver
     deliver controlMessage =
         case controlMessage of
             TICK -> atomically $ writeTQueue sendQueue TICK

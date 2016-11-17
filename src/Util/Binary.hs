@@ -62,6 +62,7 @@ data BinaryGetError = BinaryGetError { position :: Int64
                                      , message  :: String
                                      }
     deriving Show
+
 instance Exception BinaryGetError
 
 runPutA :: (LBS.ByteString -> m ()) -> Put -> m ()

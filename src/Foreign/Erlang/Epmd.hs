@@ -70,10 +70,10 @@ instance Binary NamesResponse where
             return $ NodeInfo (CL.unpack name) (fromIntegral port)
 
 -- | List all registered nodes
-epmdNames :: (MonadMask m, MonadResource m)
+epmdNames :: (MonadMask m, MonadResource m, MonadLogger m)
           => BS.ByteString -- ^ hostname
           -> m NamesResponse
-epmdNames hostName = withBufferedSocket hostName $ sendRequest NamesRequest
+epmdNames hostName = withBufferedSocket hostName (sendRequest NamesRequest)
 
 --------------------------------------------------------------------------------
 newtype LookupNodeRequest =
@@ -101,14 +101,14 @@ instance Binary LookupNodeResponse where
                                      else Just <$> get
 
 -- | Lookup a node
-lookupNode :: (MonadMask m, MonadResource m)
+lookupNode :: (MonadMask m, MonadResource m, MonadLogger m)
            => BS.ByteString -- ^ alive
            -> BS.ByteString -- ^ hostname
            -> m (Maybe NodeData)
 lookupNode alive hostName =
     fromLookupNodeResponse <$> withBufferedSocket hostName
-                                                  (sendRequest $
-                                                       LookupNodeRequest alive)
+                                                  (sendRequest
+                                                       (LookupNodeRequest alive))
 
 --------------------------------------------------------------------------------
 data RegisterNodeRequest = RegisterNodeRequest NodeData
@@ -157,13 +157,13 @@ registerNode node hostName action =
         when (isNothing mr) (throwM (NodeAlreadyRegistered node))
         action (NodeRegistration (fromJust mr))
 
-sendRequest :: (MonadMask m, MonadIO m, BufferedIOx s, Binary a, Binary b)
+sendRequest :: (MonadLogger m, MonadMask m, MonadIO m, BufferedIOx s, Binary a, Binary b)
             => a
             -> s
             -> m b
 sendRequest req sock = do
     liftIO $ runPutBuffered sock req
-    either throwM return =<< runGetBuffered sock
+    runGetBuffered sock
 
 withBufferedSocket :: (MonadIO m, MonadMask m)
                    => BS.ByteString -- ^ hostName

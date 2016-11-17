@@ -18,8 +18,9 @@ class BufferedIOx a where
     writeBuffered :: a -> LBS.ByteString -> IO ()
     closeBuffered :: a -> IO ()
 
-runGetBuffered :: (MonadIO m, BufferedIOx s, Binary a) => s -> m (Either BinaryGetError a)
-runGetBuffered s = runGetA (liftIO . readBuffered s) (liftIO . unreadBuffered s) get
+runGetBuffered :: (MonadIO m, BufferedIOx s, Binary a, MonadMask m, MonadLogger m) => s -> m a
+runGetBuffered s =
+  throwLeftM (runGetA (liftIO . readBuffered s) (liftIO . unreadBuffered s) get)
 
 runPutBuffered :: (MonadIO m, BufferedIOx s, Binary a) => s -> a -> m ()
 runPutBuffered s = runPutA (liftIO . writeBuffered s) . put
