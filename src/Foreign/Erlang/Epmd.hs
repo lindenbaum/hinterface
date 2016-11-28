@@ -76,8 +76,7 @@ epmdNames :: (MonadMask m, MonadResource m, MonadLogger m)
 epmdNames hostName = withBufferedSocket hostName (sendRequest NamesRequest)
 
 --------------------------------------------------------------------------------
-newtype LookupNodeRequest =
-      LookupNodeRequest { _fromLookupNodeRequest :: BS.ByteString }
+newtype LookupNodeRequest = LookupNodeRequest BS.ByteString
     deriving (Eq, Show)
 
 instance Binary LookupNodeRequest where
