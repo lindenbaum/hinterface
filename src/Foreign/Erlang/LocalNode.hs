@@ -235,7 +235,9 @@ getOrCreateConnection remoteName =
   where
     getExistingConnection = do
         nodeName <- atom <$> askNodeName
+        logInfoStr (printf "getExistingConnection %s" (show nodeName))
         nodeState <- askNodeState
+        logNodeState nodeState
         getConnectionForNode nodeState nodeName
 
     lookupAndConnect = lookupNode remoteAlive remoteHost >>=

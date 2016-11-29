@@ -2,6 +2,7 @@
 {-# LANGUAGE Strict         #-}
 module Foreign.Erlang.NodeState
     ( NodeState()
+    , logNodeState
     , newNodeState
     , new_pid
     , new_port
@@ -62,6 +63,13 @@ newNodeState =
                newTVarIO M.empty
               <*>  --  name2MBox
                newTVarIO M.empty      --  name2Conn
+
+logNodeState :: (Show n, MonadIO m, MonadLogger m) => NodeState p n mb c -> m ()
+logNodeState NodeState{node2Conn} =
+  do
+    m <- liftIO (readTVarIO node2Conn)
+    logInfoStr (printf "known connection keys %s" (unlines (show <$> M.keys m)))
+
 
 --------------------------------------------------------------------------------
 new_pid :: NodeState p n mb c -> IO (Word32, Word32)

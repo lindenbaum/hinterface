@@ -44,6 +44,7 @@ newConnection sock nodeState name = do
         newReceiver = recvLoop sock sendQueue nodeState
         registerConnection s r = do
             let connection = MkConnection sendQueue stopTransmitter
+            logInfoStr (printf "putConnectionForNode %s" (show name))
             liftIO (putConnectionForNode nodeState name connection)
             async awaitStopAndCleanup
             return connection
@@ -53,6 +54,7 @@ newConnection sock nodeState name = do
                 (_ :: Either SomeException ()) <- waitCatch r
                 cancel s
                 tryAndLogAll (liftIO (closeBuffered sock))
+                logInfoStr (printf "removeConnectionForNode %s" (show name))
                 liftIO (removeConnectionForNode nodeState name)
 
 -- liftIO $
