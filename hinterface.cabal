@@ -1,7 +1,15 @@
 name:                hinterface
-version:             0.5.0.0
+version:             0.5.0.1
 synopsis:            Haskell / Erlang interoperability library
-description:         Please see README.md
+description:         A library for building nodes of a distributed Erlang system in Haskell.
+
+                     Nodes can be created and registered to an epmd, Erlang terms can be
+                     marshalled to/from Erlangs binary term representation and message can
+                     be sent to or received from processes running on a different node.
+
+                     In it's preliminary state hinterface supports of Erlangs binary terms
+                     and a subset of the distribution protocol.
+
 homepage:            https://github.com/LTI2000/hinterface
 license:             BSD3
 license-file:        LICENSE
@@ -10,8 +18,8 @@ maintainer:          timo.koepke@googlemail.com, sven.heyll@gmail.com
 copyright:           2016 Timo Koepke, Sven Heyll
 category:            Language
 build-type:          Simple
--- extra-source-files:
-cabal-version:       >=1.10
+extra-source-files:  README.md, erl_echo.escript, erl_hay.escript, hay_erl.escript, stack.yaml, .travis.yml, Setup.hs, .gitignore
+cabal-version:       >=1.22
 
 library
   hs-source-dirs:      src
@@ -35,29 +43,29 @@ library
                      , NamedFieldPuns
                      , FlexibleContexts
   ghc-options:         -Wall -O2 -funbox-strict-fields
-  build-depends:       QuickCheck >= 2.8 && < 3
+  build-depends:       QuickCheck
                      , array
-                     , async >= 2.1 && < 2.2
+                     , async
                      , base >= 4.9 && < 5
                      , binary
                      , bytestring
                      , containers
                      , cryptonite
-                     , exceptions >= 0.8 && < 0.9
-                     , lifted-async >= 0.9 && < 1.0
-                     , lifted-base >= 0.2 && < 0.3
+                     , exceptions
+                     , lifted-async
+                     , lifted-base
                      , memory
-                     , monad-control >= 1.0 && < 1.1
-                     , monad-logger >= 0.3 && < 0.4
+                     , monad-control
+                     , monad-logger
                      , mtl
                      , network
                      , random
-                     , resourcet >= 1 && < 2
-                     , safe-exceptions >= 0.1 && < 0.2
+                     , resourcet
+                     , safe-exceptions
                      , stm
-                     , text >= 1.2 && < 1.3
+                     , text
                      , transformers
-                     , transformers-base >= 0.4 && < 0.5
+                     , transformers-base
                      , vector
 
   default-language:    Haskell2010
@@ -67,13 +75,13 @@ test-suite hinterface-test
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       QuickCheck
-                     , async >= 2.1 && < 2.2
+                     , async
                      , base >= 4.9 && < 5
                      , binary
                      , bytestring
                      , hinterface
                      , hspec
-                     , monad-logger >= 0.3 && < 0.4
+                     , monad-logger
                      , transformers
   other-modules:       Foreign.Erlang.NodeDataSpec
                      , Foreign.Erlang.HandshakeSpec
