@@ -1,5 +1,5 @@
 name:                hinterface
-version:             0.5.0.1
+version:             0.5.0.2
 synopsis:            Haskell / Erlang interoperability library
 description:         A library for building nodes of a distributed Erlang system in Haskell.
 
