@@ -10,7 +10,7 @@ description:         A library for building nodes of a distributed Erlang system
                      In it's preliminary state hinterface supports of Erlangs binary terms
                      and a subset of the distribution protocol.
 
-homepage:            https://github.com/LTI2000/hinterface
+homepage:            https://github.com/lindenbaum/hinterface
 license:             BSD3
 license-file:        LICENSE
 author:              Timo Koepke, Sven Heyll
@@ -94,4 +94,4 @@ test-suite hinterface-test
 
 source-repository head
   type:     git
-  location: https://github.com/LTI2000/hinterface.git
+  location: https://github.com/lindenbaum/hinterface.git
