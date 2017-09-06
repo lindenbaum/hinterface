@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Util.Binary
     ( runGetA
     , BinaryGetError(..)
@@ -36,7 +37,9 @@ import           Data.Char
 import           Data.Int             (Int64)
 import           Data.Word
 
+#if !MIN_VERSION_binary(0,8,5)
 import           Util.FloatCast
+#endif
 import           Util.IOExtra
 
 --------------------------------------------------------------------------------
@@ -68,6 +71,7 @@ instance Exception BinaryGetError
 runPutA :: (LBS.ByteString -> m ()) -> Put -> m ()
 runPutA = (. runPut)
 
+#if !MIN_VERSION_binary(0,8,5)
 --------------------------------------------------------------------------------
 ------------------------------------------------------------------------
 -- Floats/Doubles
@@ -106,6 +110,7 @@ putDoublehost :: Double -> Put
 putDoublehost = putWord64host . doubleToWord
 
 {-# INLINE putDoublehost #-}
+#endif
 
 --------------------------------------------------------------------------------
 putLength16beByteString :: BS.ByteString -> Put
@@ -141,6 +146,7 @@ putChar8 c = do
 getChar8 :: Get Char
 getChar8 = (chr . fromIntegral) <$> getWord8
 
+#if !MIN_VERSION_binary(0,8,5)
 ------------------------------------------------------------------------
 -- Double/Float reads
 -- | Read a 'Float' in big endian IEEE-754 format.
@@ -178,6 +184,7 @@ getDoublehost :: Get Double
 getDoublehost = wordToDouble <$> getWord64host
 
 {-# INLINE getDoublehost #-}
+#endif
 
 --------------------------------------------------------------------------------
 getLength8ByteString :: Get BS.ByteString
