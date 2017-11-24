@@ -150,6 +150,7 @@ runNodeT LocalNodeConfig{aliveName,hostName,cookie} NodeT{unNodeT} = do
                                        , EXTENDED_PIDS_PORTS
                                        , BIT_BINARIES
                                        , NEW_FLOATS
+                                       , UTF8_ATOMS
                                        ]
             name = Name { n_distVer = R6B
                         , n_distFlags = dFlags

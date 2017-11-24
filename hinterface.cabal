@@ -1,5 +1,5 @@
 name:                hinterface
-version:             0.5.0.2
+version:             0.5.1.0
 synopsis:            Haskell / Erlang interoperability library
 description:         A library for building nodes of a distributed Erlang system in Haskell.
 
@@ -33,6 +33,7 @@ library
                      , Foreign.Erlang.NodeData
                      , Foreign.Erlang.Epmd
                      , Foreign.Erlang.Digest
+                     , Foreign.Erlang.GTerm
                      , Foreign.Erlang.Handshake
                      , Foreign.Erlang.Term
                      , Foreign.Erlang.LocalNode
@@ -68,6 +69,19 @@ library
                      , transformers-base
                      , vector
 
+  default-language:    Haskell2010
+
+executable hinterface-echo
+  hs-source-dirs:      examples/echo
+  main-is:             Main.hs
+  build-depends:       base >= 4.9 && < 5
+                     , resourcet
+                     , monad-logger
+                     , hinterface
+                     , lifted-base
+  default-extensions:  OverloadedStrings
+                     , NamedFieldPuns
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
 test-suite hinterface-test

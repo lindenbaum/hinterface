@@ -9,6 +9,7 @@ module Util.Binary
     , putDoublebe
     , putDoublele
     , putDoublehost
+    , putLength8ByteString
     , putLength16beByteString
     , putLength32beByteString
     , putWithLength16be
@@ -113,6 +114,11 @@ putDoublehost = putWord64host . doubleToWord
 #endif
 
 --------------------------------------------------------------------------------
+putLength8ByteString :: BS.ByteString -> Put
+putLength8ByteString bs = do
+    putWord8 (fromIntegral (BS.length bs))
+    putByteString bs
+
 putLength16beByteString :: BS.ByteString -> Put
 putLength16beByteString bs = do
     putWord16be (fromIntegral (BS.length bs))
