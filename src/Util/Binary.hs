@@ -146,11 +146,10 @@ putWithLength32be putA = do
 
 --------------------------------------------------------------------------------
 putChar8 :: Char -> Put
-putChar8 c = do
-    putWord8 $ fromIntegral $ ord c
+putChar8 c = putWord8 $ fromIntegral $ ord c
 
 getChar8 :: Get Char
-getChar8 = (chr . fromIntegral) <$> getWord8
+getChar8 = chr . fromIntegral <$> getWord8
 
 #if !MIN_VERSION_binary(0,8,5)
 ------------------------------------------------------------------------
@@ -219,5 +218,5 @@ matchWord8 expected = do
     if expected == actual then return () else fail $ "expected " ++ show expected ++ ", actual " ++ show actual
 
 matchChar8 :: Char -> Get ()
-matchChar8 expected = do
+matchChar8 expected =
     matchWord8 $ fromIntegral $ ord expected
