@@ -23,7 +23,7 @@ spec = describe "ControlMessage" $ do
             [ 0
             , 0
             , 0
-            , 38
+            , 36
             , 112
             , 131
             , 104
@@ -31,8 +31,7 @@ spec = describe "ControlMessage" $ do
             , 97
             , 1
             , 103
-            , 100
-            , 0
+            , 119
             , 4
             , 102
             , 114
@@ -48,8 +47,7 @@ spec = describe "ControlMessage" $ do
             , 2
             , 3
             , 103
-            , 100
-            , 0
+            , 119
             , 2
             , 116
             , 111
@@ -68,19 +66,17 @@ spec = describe "ControlMessage" $ do
             [ 0
             , 0
             , 0
-            , 33
+            , 30
             , 112
             , 131
             , 104
             , 3
             , 97
             , 2
-            , 100
-            , 0
+            , 119
             , 0
             , 103
-            , 100
-            , 0
+            , 119
             , 2
             , 116
             , 111
@@ -94,8 +90,7 @@ spec = describe "ControlMessage" $ do
             , 5
             , 6
             , 131
-            , 100
-            , 0
+            , 119
             , 5
             , 104
             , 101
@@ -108,7 +103,7 @@ spec = describe "ControlMessage" $ do
             [ 0
             , 0
             , 0
-            , 47
+            , 44
             , 112
             , 131
             , 104
@@ -116,8 +111,7 @@ spec = describe "ControlMessage" $ do
             , 97
             , 3
             , 103
-            , 100
-            , 0
+            , 119
             , 4
             , 102
             , 114
@@ -133,8 +127,7 @@ spec = describe "ControlMessage" $ do
             , 2
             , 3
             , 103
-            , 100
-            , 0
+            , 119
             , 2
             , 116
             , 111
@@ -147,8 +140,7 @@ spec = describe "ControlMessage" $ do
             , 0
             , 5
             , 6
-            , 100
-            , 0
+            , 119
             , 6
             , 110
             , 111
@@ -162,7 +154,7 @@ spec = describe "ControlMessage" $ do
             [ 0
             , 0
             , 0
-            , 38
+            , 36
             , 112
             , 131
             , 104
@@ -170,8 +162,7 @@ spec = describe "ControlMessage" $ do
             , 97
             , 4
             , 103
-            , 100
-            , 0
+            , 119
             , 4
             , 102
             , 114
@@ -187,8 +178,7 @@ spec = describe "ControlMessage" $ do
             , 2
             , 3
             , 103
-            , 100
-            , 0
+            , 119
             , 2
             , 116
             , 111
@@ -209,7 +199,7 @@ spec = describe "ControlMessage" $ do
             [ 0
             , 0
             , 0
-            , 40
+            , 36
             , 112
             , 131
             , 104
@@ -217,8 +207,7 @@ spec = describe "ControlMessage" $ do
             , 97
             , 6
             , 103
-            , 100
-            , 0
+            , 119
             , 4
             , 102
             , 114
@@ -233,17 +222,14 @@ spec = describe "ControlMessage" $ do
             , 0
             , 2
             , 3
-            , 100
+            , 119
             , 0
-            , 0
-            , 100
-            , 0
+            , 119
             , 2
             , 116
             , 111
             , 131
-            , 100
-            , 0
+            , 119
             , 5
             , 104
             , 101
@@ -256,7 +242,7 @@ spec = describe "ControlMessage" $ do
             [ 0
             , 0
             , 0
-            , 38
+            , 36
             , 112
             , 131
             , 104
@@ -264,8 +250,7 @@ spec = describe "ControlMessage" $ do
             , 97
             , 7
             , 103
-            , 100
-            , 0
+            , 119
             , 4
             , 102
             , 114
@@ -281,8 +266,7 @@ spec = describe "ControlMessage" $ do
             , 2
             , 3
             , 103
-            , 100
-            , 0
+            , 119
             , 2
             , 116
             , 111
@@ -301,7 +285,7 @@ spec = describe "ControlMessage" $ do
             [ 0
             , 0
             , 0
-            , 47
+            , 44
             , 112
             , 131
             , 104
@@ -309,8 +293,7 @@ spec = describe "ControlMessage" $ do
             , 97
             , 8
             , 103
-            , 100
-            , 0
+            , 119
             , 4
             , 102
             , 114
@@ -326,8 +309,7 @@ spec = describe "ControlMessage" $ do
             , 2
             , 3
             , 103
-            , 100
-            , 0
+            , 119
             , 2
             , 116
             , 111
@@ -340,8 +322,7 @@ spec = describe "ControlMessage" $ do
             , 0
             , 5
             , 6
-            , 100
-            , 0
+            , 119
             , 6
             , 110
             , 111
