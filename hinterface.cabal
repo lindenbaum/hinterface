@@ -1,5 +1,5 @@
 name:                hinterface
-version:             0.5.0.2
+version:             0.6.0.0
 synopsis:            Haskell / Erlang interoperability library
 description:         A library for building nodes of a distributed Erlang system in Haskell.
 
@@ -15,7 +15,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              Timo Koepke, Sven Heyll
 maintainer:          timo.koepke@googlemail.com, sven.heyll@gmail.com
-copyright:           2016 Timo Koepke, Sven Heyll
+copyright:           2016-2018 Timo Koepke, Sven Heyll
 category:            Language
 build-type:          Simple
 extra-source-files:  README.md, stack.yaml, .travis.yml, Setup.hs, .gitignore

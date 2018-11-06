@@ -1,12 +1,7 @@
-resolver: lts-9.3
-
-packages:
-- '.'
-
-extra-deps: []
-
 flags: {}
-
 extra-package-dbs: []
-
+packages:
+- .
 pvp-bounds: lower
+extra-deps: []
+resolver: lts-12.9
