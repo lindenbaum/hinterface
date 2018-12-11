@@ -4,4 +4,4 @@ packages:
 - .
 pvp-bounds: lower
 extra-deps: []
-resolver: lts-12.9
+resolver: lts-12.19

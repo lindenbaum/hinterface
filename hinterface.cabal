@@ -1,5 +1,5 @@
 name:                hinterface
-version:             0.7.0
+version:             0.7.1
 synopsis:            Haskell / Erlang interoperability library
 description:         A library for building nodes of a distributed Erlang system in Haskell.
 
@@ -42,6 +42,8 @@ library
   default-extensions:  OverloadedStrings
                      , NamedFieldPuns
                      , FlexibleContexts
+                     , PatternSynonyms
+                     , ViewPatterns
   ghc-options:         -Wall -O2 -funbox-strict-fields
   build-depends:       QuickCheck >=2.11.3 && <2.12
                      , array >=0.5.2.0 && <0.6

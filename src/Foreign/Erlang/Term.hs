@@ -9,9 +9,31 @@
 
 module Foreign.Erlang.Term
     ( -- * External Term Format
-      Term()
+      Term(..
+          , Tuple2
+          , Tuple3
+          , Tuple4
+          , Tuple5
+          , Tuple6
+          , Tuple7
+          , List1
+          , List2
+          , List3
+          , List4
+          , List5
+          , List6
+          , List7
+          , Map1
+          , Map2
+          , Map3
+          , Map4
+          , Map5
+          , Map6
+          , Map7
+          )
     , putTerm
     , getTerm
+    , MapEntry(.., (:=>))
       -- ** Conversion to and from External Term Format
     , ToTerm(..)
     , FromTerm(..)
@@ -127,6 +149,105 @@ data Term = Integer Integer
     deriving (Eq, Generic)
 
 instance NFData Term
+
+-- ** Pattern Synonyms for 'Term's
+pattern Tuple2 :: Term -> Term -> Term
+pattern Tuple2 t1 t2 <- Tuple (toList -> [t1,t2]) where
+    Tuple2 t1 t2  = Tuple (fromList [t1,t2])
+
+pattern Tuple3 :: Term -> Term -> Term -> Term
+pattern Tuple3 t1 t2 t3 <- Tuple (toList -> [t1,t2,t3]) where
+    Tuple3 t1 t2 t3  = Tuple (fromList [t1,t2,t3])
+
+pattern Tuple4 :: Term -> Term -> Term -> Term -> Term
+pattern Tuple4 t1 t2 t3 t4 <- Tuple (toList -> [t1,t2,t3,t4]) where
+    Tuple4 t1 t2 t3 t4  = Tuple (fromList [t1,t2,t3,t4])
+
+pattern Tuple5 :: Term -> Term -> Term -> Term -> Term -> Term
+pattern Tuple5 t1 t2 t3 t4 t5 <- Tuple (toList -> [t1,t2,t3,t4,t5]) where
+    Tuple5 t1 t2 t3 t4 t5  = Tuple (fromList [t1,t2,t3,t4,t5])
+
+pattern Tuple6 :: Term
+                        -> Term -> Term -> Term -> Term -> Term -> Term
+pattern Tuple6 t1 t2 t3 t4 t5 t6 <- Tuple (toList -> [t1,t2,t3,t4,t5,t6]) where
+    Tuple6 t1 t2 t3 t4 t5 t6  = Tuple (fromList [t1,t2,t3,t4,t5,t6])
+
+pattern Tuple7 :: Term
+                        -> Term -> Term -> Term -> Term -> Term -> Term -> Term
+pattern Tuple7 t1 t2 t3 t4 t5 t6 t7 <- Tuple (toList -> [t1,t2,t3,t4,t5,t6,t7]) where
+    Tuple7 t1 t2 t3 t4 t5 t6 t7  = Tuple (fromList [t1,t2,t3,t4,t5,t6,t7])
+
+pattern List1 :: Term -> Term
+pattern List1 t1 <- List (toList -> [t1]) Nil where
+    List1 t1  = List (fromList [t1]) Nil
+
+pattern List2 :: Term -> Term -> Term
+pattern List2 t1 t2 <- List (toList -> [t1,t2]) Nil where
+    List2 t1 t2  = List (fromList [t1,t2]) Nil
+
+pattern List3 :: Term -> Term -> Term -> Term
+pattern List3 t1 t2 t3 <- List (toList -> [t1,t2,t3]) Nil where
+    List3 t1 t2 t3  = List (fromList [t1,t2,t3]) Nil
+
+pattern List4 :: Term -> Term -> Term -> Term -> Term
+pattern List4 t1 t2 t3 t4 <- List (toList -> [t1,t2,t3,t4]) Nil where
+    List4 t1 t2 t3 t4  = List (fromList [t1,t2,t3,t4]) Nil
+
+pattern List5 :: Term -> Term -> Term -> Term -> Term -> Term
+pattern List5 t1 t2 t3 t4 t5 <- List (toList -> [t1,t2,t3,t4,t5]) Nil where
+    List5 t1 t2 t3 t4 t5  = List (fromList [t1,t2,t3,t4,t5]) Nil
+
+pattern List6 :: Term
+                       -> Term -> Term -> Term -> Term -> Term -> Term
+pattern List6 t1 t2 t3 t4 t5 t6 <- List (toList -> [t1,t2,t3,t4,t5,t6]) Nil where
+    List6 t1 t2 t3 t4 t5 t6  = List (fromList [t1,t2,t3,t4,t5,t6]) Nil
+
+pattern List7 :: Term
+                       -> Term -> Term -> Term -> Term -> Term -> Term -> Term
+pattern List7 t1 t2 t3 t4 t5 t6 t7 <- List (toList -> [t1,t2,t3,t4,t5,t6,t7]) Nil where
+    List7 t1 t2 t3 t4 t5 t6 t7  = List (fromList [t1,t2,t3,t4,t5,t6,t7]) Nil
+
+pattern (:=>) :: Term -> Term -> MapEntry
+pattern k :=> v = MapEntry k v
+
+pattern Map1 :: MapEntry -> Term
+pattern Map1 t1 <- Map (toList -> [t1]) where
+    Map1 t1  = Map (fromList [t1])
+
+pattern Map2 :: MapEntry -> MapEntry -> Term
+pattern Map2 t1 t2 <- Map (toList -> [t1,t2]) where
+    Map2 t1 t2  = Map (fromList [t1,t2])
+
+pattern Map3 :: MapEntry -> MapEntry -> MapEntry -> Term
+pattern Map3 t1 t2 t3 <- Map (toList -> [t1,t2,t3]) where
+    Map3 t1 t2 t3  = Map (fromList [t1,t2,t3])
+
+pattern Map4 :: MapEntry
+                      -> MapEntry -> MapEntry -> MapEntry -> Term
+pattern Map4 t1 t2 t3 t4 <- Map (toList -> [t1,t2,t3,t4]) where
+    Map4 t1 t2 t3 t4  = Map (fromList [t1,t2,t3,t4])
+
+pattern Map5 :: MapEntry
+                      -> MapEntry -> MapEntry -> MapEntry -> MapEntry -> Term
+pattern Map5 t1 t2 t3 t4 t5 <- Map (toList -> [t1,t2,t3,t4,t5]) where
+    Map5 t1 t2 t3 t4 t5  = Map (fromList [t1,t2,t3,t4,t5])
+
+pattern Map6 :: MapEntry
+                      -> MapEntry -> MapEntry -> MapEntry -> MapEntry -> MapEntry -> Term
+pattern Map6 t1 t2 t3 t4 t5 t6 <- Map (toList -> [t1,t2,t3,t4,t5,t6]) where
+    Map6 t1 t2 t3 t4 t5 t6  = Map (fromList [t1,t2,t3,t4,t5,t6])
+
+pattern Map7 :: MapEntry
+                      -> MapEntry
+                      -> MapEntry
+                      -> MapEntry
+                      -> MapEntry
+                      -> MapEntry
+                      -> MapEntry
+                      -> Term
+pattern Map7 t1 t2 t3 t4 t5 t6 t7 <- Map (toList -> [t1,t2,t3,t4,t5,t6,t7]) where
+    Map7 t1 t2 t3 t4 t5 t6 t7  = Map (fromList [t1,t2,t3,t4,t5,t6,t7])
+
 
 data MapEntry = MapEntry { key   :: Term
                          , value :: Term
