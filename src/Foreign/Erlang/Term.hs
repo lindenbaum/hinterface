@@ -5,7 +5,9 @@
 {-# LANGUAGE KindSignatures             #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
-{-# OPTIONS_GHC -fno-warn-unused-binds #-}
+{-# LANGUAGE PatternSynonyms            #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# OPTIONS_GHC -fno-warn-unused-binds  #-}
 
 module Foreign.Erlang.Term
     ( -- * External Term Format
@@ -107,8 +109,6 @@ import qualified Data.ByteString.Char8         as CS
                                                 )
 import           Data.Vector                    ( (!)
                                                 , Vector
-                                                , fromList
-                                                , toList
                                                 )
 import qualified Data.Vector                   as V
                                                 ( length
@@ -130,9 +130,11 @@ import           Data.Bits                      ( shiftR
                                                 , (.&.)
                                                 )
 import           Data.Monoid
+import           GHC.Exts as E
 import           GHC.Generics
 
 --------------------------------------------------------------------------------
+
 data Term = Integer Integer
           | Float Double
           | Atom ByteString
@@ -379,13 +381,39 @@ showsByteStringAsIntList b
 instance IsString Term where
     fromString = atom . CS.pack
 
+instance E.IsList Term where
+    type Item Term = Term
+    fromList xs = List (fromList xs) Nil
+    toList (List xs Nil) = toList xs
+    toList _             = []
+
 instance FromTerm Term where
     fromTerm = Just
 
 instance ToTerm Term where
     toTerm = P.id
 
+
+instance Num Term where
+ (Integer x) + (Integer y) = Integer (x+y)
+ (Float x) + (Float y) = Float (x+y)
+ _ + _ = error "non numeric arguments to (+)"
+ (Integer x) * (Integer y) = Integer (x*y)
+ (Float x) * (Float y) = Float (x*y)
+ _ * _ = error "non numeric arguments to (*)"
+ abs (Integer x)  = Integer (abs x)
+ abs (Float x)  = Float (abs x)
+ abs _ = error "non numeric arguments to 'abs'"
+ signum (Integer x)  = Integer (signum x)
+ signum (Float x)  = Float (signum x)
+ signum _ = error "non numeric arguments to 'signum'"
+ negate (Integer x)  = Integer (negate x)
+ negate (Float x)  = Float (negate x)
+ negate _ = error "non numeric arguments to 'negate'"
+ fromInteger = integer
+
 --------------------------------------------------------------------------------
+
 class ToTerm a where
     toTerm :: a -> Term
 
