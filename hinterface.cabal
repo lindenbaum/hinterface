@@ -91,8 +91,41 @@ test-suite hinterface-test
                      , Foreign.Erlang.HandshakeSpec
                      , Foreign.Erlang.ControlMessageSpec
                      , Foreign.Erlang.TermSpec
-  default-extensions:  OverloadedStrings
+                     , Foreign.Erlang.Term2Experimental
+  default-extensions:  AllowAmbiguousTypes
+                     , ConstraintKinds
+                     , DataKinds
+                     , DeriveFoldable
+                     , DeriveFunctor
+                     , DeriveGeneric
+                     , DeriveTraversable
+                     , ExistentialQuantification
+                     , FlexibleContexts
+                     , FlexibleInstances
+                     , FunctionalDependencies
+                     , GADTs
+                     , GeneralizedNewtypeDeriving
+                     , KindSignatures
+                     , LambdaCase
+                     , MultiParamTypeClasses
                      , NamedFieldPuns
+                     , OverloadedLists
+                     , OverloadedStrings
+                     , PatternSynonyms
+                     , RankNTypes
+                     , ScopedTypeVariables
+                     , StandaloneDeriving
+                     , TemplateHaskell
+                     , TupleSections
+                     , TypeApplications
+                     , TypeFamilies
+                     , TypeInType
+                     , TypeOperators
+                     , ViewPatterns
+  other-extensions:    CPP
+                     , IncoherentInstances
+                     , Strict
+                     , StrictData
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
