@@ -31,10 +31,6 @@ instance SomeTerm.FromTerm (Term Atoms) where
   fromTerm a@(SomeTerm.Atom _) = Just (Atom (show a))
   fromTerm _ = Nothing
 
-instance SomeTerm.FromTerm (Term Atoms) where
-  fromTerm a@(SomeTerm.Atom _) = Just (Atom (show a))
-  fromTerm _ = Nothing
-
 instance SomeTerm.ToTerm (Term t) where
   toTerm (Atom a) = SomeTerm.atom (fromString a)
   toTerm a@AtomSymbol =
