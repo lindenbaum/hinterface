@@ -775,7 +775,7 @@ instance Binary Term where
 
     put (Binary b) = do
         putWord8 binary_ext
-        putLength16beByteString b
+        putLength32beByteString b
 
     put (NewReference node' creation ids) = do
         putWord8 new_reference_ext
