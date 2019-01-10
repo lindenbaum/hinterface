@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wno-unticked-promoted-constructors -Wno-missing-pattern-synonym-signatures #-}
+{-# LANGUAGE RankNTypes, TypeInType, ScopedTypeVariables, TypeOperators, GADTs #-}
 module Foreign.Erlang.Term2Experimental where
 
 import           GHC.TypeLits
@@ -27,9 +28,9 @@ pattern Tup5 t1 t2 t3 t4 t5 = ConsTuple t1 (Tup4 t2 t3 t4 t5)
 pattern Tup6 t1 t2 t3 t4 t5 t6 = ConsTuple t1 (Tup5 t2 t3 t4 t5 t6)
 pattern Tup7 t1 t2 t3 t4 t5 t6 t7 = ConsTuple t1 (Tup6 t2 t3 t4 t5 t6 t7)
 
-instance SomeTerm.FromTerm (Term Atoms) where
-  fromTerm a@(SomeTerm.Atom _) = Just (Atom (show a))
-  fromTerm _ = Nothing
+-- instance SomeTerm.FromTerm (Term Atoms) where
+--   fromTerm a@(SomeTerm.Atom _) = Just (Atom (show a))
+--   fromTerm _ = Nothing
 
 instance SomeTerm.ToTerm (Term t) where
   toTerm (Atom a) = SomeTerm.atom (fromString a)
