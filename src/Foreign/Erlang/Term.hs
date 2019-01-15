@@ -38,7 +38,9 @@ module Foreign.Erlang.Term
     , MapEntry(.., (:=>))
       -- ** Conversion to and from External Term Format
     , ToTerm(..)
+    , toTerms
     , FromTerm(..)
+    , fromTerms
     , fromTermA
       -- ** Constructors
     , integer
@@ -129,6 +131,7 @@ import           Data.Int
 import           Data.Bits                      ( shiftR
                                                 , (.&.)
                                                 )
+import           Data.List.NonEmpty     (NonEmpty(..))
 import           Data.Monoid
 import           GHC.Exts as E
 import           GHC.Generics
@@ -429,6 +432,22 @@ instance FromTerm () where
     fromTerm (Tuple ts) | V.length ts == 0 = Just ()
     fromTerm _ = Nothing
 
+instance FromTerm Double where
+    fromTerm (Float f) = Just f
+    fromTerm _ = Nothing
+
+instance FromTerm Bool where
+    fromTerm "true" = Just True
+    fromTerm "false" = Just False
+    fromTerm _ = Nothing
+instance FromTerm Integer where
+    fromTerm (Integer i) = Just i
+    fromTerm _ = Nothing
+
+instance FromTerm String where
+    fromTerm (String s) = Just (CS.unpack s)
+    fromTerm _ = Nothing
+
 instance (FromTerm a) => FromTerm (Tuple1 a) where
     fromTerm (Tuple ts) | V.length ts == 1 = Tuple1 <$> fromTerm (ts ! 0)
     fromTerm _ = Nothing
@@ -456,8 +475,42 @@ instance (FromTerm a, FromTerm b, FromTerm c, FromTerm d, FromTerm e) => FromTer
                                                     <*> fromTerm (ts ! 4)
     fromTerm _ = Nothing
 
+instance FromTerm a => FromTerm (NonEmpty a) where
+    fromTerm (List (toList -> xs) Nil) =
+        case sequence (fromTerm <$> xs) of
+            Just (h:t) -> Just (h :| t)
+            _ -> Nothing
+    fromTerm _ = Nothing
+
+instance FromTerm a => FromTerm (Maybe a) where
+    fromTerm (Tuple2 "ok" x) = Just <$> fromTerm x
+    fromTerm "error" = Just Nothing
+    fromTerm _ = Nothing
+
+instance (FromTerm a, FromTerm b) => FromTerm (Either a b) where
+    fromTerm (Tuple2 "ok" x) = Right <$> fromTerm x
+    fromTerm (Tuple2 "error" x) = Left <$> fromTerm x
+    fromTerm _ = Nothing
+
+fromTerms :: FromTerm a => Term -> Maybe [a]
+fromTerms (List (toList -> xs) Nil) = sequence (fromTerm <$> xs)
+fromTerms _ = Nothing
+
 instance ToTerm () where
     toTerm () = tuple []
+
+instance ToTerm Integer where
+    toTerm = Integer
+
+instance ToTerm String where
+    toTerm = String . CS.pack
+
+instance ToTerm Bool where
+    toTerm True = "true"
+    toTerm False = "false"
+
+instance ToTerm Double where
+    toTerm = Float
 
 instance (ToTerm a) => ToTerm (Tuple1 a) where
     toTerm (Tuple1 a) = tuple [ toTerm a ]
@@ -475,19 +528,19 @@ instance (ToTerm a, ToTerm b, ToTerm c, ToTerm d, ToTerm e) => ToTerm (a, b, c, 
     toTerm (a, b, c, d, e) =
         tuple [ toTerm a, toTerm b, toTerm c, toTerm d, toTerm e ]
 
-instance FromTerm Integer where
-    fromTerm (Integer i) = Just i
-    fromTerm _ = Nothing
+instance ToTerm a => ToTerm (NonEmpty a) where
+    toTerm = toTerms . toList
 
-instance ToTerm Integer where
-    toTerm = Integer
+instance ToTerm a => ToTerm (Maybe a) where
+    toTerm (Just x) = Tuple2 "ok" (toTerm x)
+    toTerm Nothing = "error"
 
-instance FromTerm String where
-    fromTerm (String s) = Just (CS.unpack s)
-    fromTerm _ = Nothing
+instance (ToTerm a, ToTerm b) => ToTerm (Either a b) where
+    toTerm (Left x) = Tuple2 "error" (toTerm x)
+    toTerm (Right x) = Tuple2 "ok" (toTerm x)
 
-instance ToTerm String where
-    toTerm = String . CS.pack
+toTerms :: ToTerm a => [a] -> Term
+toTerms xs = List (fromList (toTerm <$> xs)) Nil
 
 --------------------------------------------------------------------------------
 -- | Construct an integer
@@ -723,8 +776,7 @@ instance Binary Term where
         putWord8 new_float_ext
         putDoublebe d
 
-    put (Atom n) = do
-        putAtom n
+    put (Atom n) = putAtom n
 
     put (Reference nodeName id creation) = do
         putWord8 reference_ext
@@ -760,8 +812,7 @@ instance Binary Term where
         putWord32be $ fromIntegral (V.length e)
         mapM_ put e
 
-    put Nil = do
-        putWord8 nil_ext
+    put Nil = putWord8 nil_ext
 
     put (String s) = do
         putWord8 string_ext
@@ -783,8 +834,7 @@ instance Binary Term where
         putAtom node'
         putWord8 creation
         mapM_ putWord32be ids
-    get = do
-        lookAhead getWord8 >>= get'
+    get = lookAhead getWord8 >>= get'
       where
         get' :: Word8 -> Get Term
         get' tag
@@ -883,7 +933,7 @@ getMap f = do
     f <$> (getWord32be >>= _getVector . fromIntegral)
 
 getNil :: (() -> a) -> Get a
-getNil f = do
+getNil f =
     f <$> matchWord8 nil_ext
 
 getString :: (ByteString -> a) -> Get a

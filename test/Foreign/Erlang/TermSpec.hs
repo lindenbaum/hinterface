@@ -14,6 +14,7 @@ import           Data.Binary                    ( decode
 import           Data.ByteString.Char8          ( )
 import qualified Data.ByteString.Lazy          as B
 import           Data.Word                      ( )
+import           Data.List.NonEmpty             (NonEmpty(..))
 import           Foreign.Erlang.Term
 import           Test.Hspec
 import           Test.QuickCheck
@@ -28,6 +29,19 @@ spec = do
     it "represents all valid Erlang pids" $ property $ \x y z ->
       let p = pid "nodename" x y z
       in  fromTerm (decode (encode (toTerm p))) `shouldBe` (Just p)
+  describe "FromTerm/ToTerm" $ do
+    it "converts '[a]' back and forth"
+      $ property
+      $ \(xs :: [Integer]) -> fromTerms (toTerms xs) `shouldBe` Just xs
+    it "converts 'Maybe a' back and forth"
+      $ property
+      $ \(x :: Maybe Bool) -> fromTerm (toTerm x) `shouldBe` Just x
+    it "converts 'Either a b' back and forth"
+      $ property
+      $ \(x :: Either Integer Double) -> fromTerm (toTerm x) `shouldBe` Just x
+    it "converts 'NonEmpty a' back and forth"
+      $ property
+      $ \(h :: Integer) (t :: [Integer]) -> let xs = h :| t in fromTerm (toTerm xs) `shouldBe` Just xs
   describe "Integer"
     $ it "has a Binary instance such that decode is the inverse of encode"
     $ property
