@@ -53,7 +53,7 @@ data DistributionFlag = PUBLISHED            --  The node should be published an
                       | NEW_FLOATS           --  The node understands new float format
                       | UNICODE_IO
                       | DIST_HDR_ATOM_CACHE  --  The node implements atom cache in distribution header.
-                      | SMALL_ATOM_TAGS      --  The node understand the SMALL_ATOM_EXT tag
+                      | SMALL_ATOM_TAGS      --  The node understand the smallAtomExt tag
                       | UTF8_ATOMS           --  The node understand UTF-8 encoded atoms
     deriving (Eq, Show, Enum, Bounded, Ord)
 

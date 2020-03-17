@@ -209,7 +209,7 @@ send :: (MonadMask m, MonadBaseControl IO m, MonadResource m, MonadLoggerIO m)
      => Pid
      -> Term
      -> NodeT m ()
-send toPid message = getOrCreateConnection (atom_name (node (toTerm toPid)))
+send toPid message = getOrCreateConnection (atomName (node (toTerm toPid)))
     >>= maybe (return ()) (sendControlMessage (SEND toPid message))
 
 sendReg :: (MonadMask m, MonadBaseControl IO m, MonadResource m, MonadLoggerIO m)
@@ -219,7 +219,7 @@ sendReg :: (MonadMask m, MonadBaseControl IO m, MonadResource m, MonadLoggerIO m
         -> Term
         -> NodeT m ()
 sendReg MkMailbox{self} regName nodeName message =
-    getOrCreateConnection (atom_name nodeName) >>=
+    getOrCreateConnection (atomName nodeName) >>=
         maybe (return ()) (sendControlMessage (REG_SEND self regName message))
 
 splitNodeName :: CS.ByteString -> (CS.ByteString, CS.ByteString)

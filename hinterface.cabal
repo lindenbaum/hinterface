@@ -1,5 +1,5 @@
 name:                hinterface
-version:             0.10.0
+version:             1.0.0
 synopsis:            Haskell / Erlang interoperability library
 description:         A library for building nodes of a distributed Erlang system in Haskell.
 
@@ -45,7 +45,7 @@ library
                      , PatternSynonyms
                      , ViewPatterns
   ghc-options:         -Wall -funbox-strict-fields
-  build-depends:       QuickCheck >=2.11.3 && <2.13
+  build-depends:       QuickCheck >=2.11 && <2.14
                      , array >=0.5.2.0 && <0.6
                      , async >=2.2.1 && <2.3
                      , base >= 4.9 && < 5
@@ -77,13 +77,13 @@ test-suite hinterface-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-  build-depends:       QuickCheck >=2.11.3 && <2.13
+  build-depends:       QuickCheck >=2.11.3 && <2.14
                      , async
                      , base >= 4.9 && < 5
                      , binary
                      , bytestring
                      , hinterface
-                     , hspec >= 2.4 && < 2.7
+                     , hspec >= 2.4 && < 2.8
                      , monad-logger
                      , transformers
                      , vector

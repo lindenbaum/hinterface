@@ -8,11 +8,12 @@
 *~
 *_flymake.hs
 .hsenv
-/*.html
+*.html
+.idea
+*.lock
 *.iml
-/.idea/
-/.ideaHaskellLib/
-/.dir-locals.el
+.ideaHaskellLib
+.dir-locals.el
 *.refactored.hs
 /*.html
 src/**/*.c

@@ -10,8 +10,9 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds  #-}
 
 module Foreign.Erlang.Term
-    ( -- * External Term Format
-      Term(..
+    ( ExternalTerm(..)
+     , -- * Term Format
+       Term(..
           , Tuple2
           , Tuple3
           , Tuple4
@@ -33,8 +34,6 @@ module Foreign.Erlang.Term
           , Map6
           , Map7
           )
-    , putTerm
-    , getTerm
     , MapEntry(.., (:=>))
       -- ** Conversion to and from External Term Format
     , ToTerm(..)
@@ -60,26 +59,26 @@ module Foreign.Erlang.Term
     , improperList
     , ref
       -- ** Recognizers
-    , is_integer
-    , is_float
-    , is_atom
-    , is_reference
-    , is_port
-    , is_pid
-    , is_tuple
-    , is_map
-    , is_list
-    , is_binary
+    , isInteger
+    , isFloat
+    , isAtom
+    , isReference
+    , isPort
+    , isPid
+    , isTuple
+    , isMap
+    , isList
+    , isBinary
       -- ** Accessors
     , node
-    , atom_name
+    , atomName
     , length
     , element
-    , to_string
-    , to_integer
+    , toString
+    , toIntegerTerm
       -- ** Matchers
-    , match_atom
-    , match_tuple
+    , matchAtom
+    , matchTuple
     )
 where
 
@@ -95,7 +94,7 @@ import           Control.DeepSeq
 import           Control.Monad                 as M
                                                 ( replicateM )
 import           Data.String
-import           Data.ByteString                ( ByteString )
+import           Data.ByteString                ( ByteString, pack )
 import           Data.ByteString.Char8          ( unpack )
 import qualified Data.ByteString               as BS
                                                 ( head
@@ -135,6 +134,20 @@ import           Data.List.NonEmpty     (NonEmpty(..))
 import           Data.Monoid
 import           GHC.Exts as E
 import           GHC.Generics
+import GHC.Stack (HasCallStack)
+
+--------------------------------------------------------------------------------
+
+newtype ExternalTerm = MkExternalTerm { fromExternalTerm :: Term }
+  deriving (Eq, Generic, Show, NFData, Arbitrary)
+
+instance Binary ExternalTerm where
+  put (MkExternalTerm t) = do
+    putWord8 magicVersion
+    put t
+  get = do
+    matchWord8 magicVersion
+    MkExternalTerm <$> get
 
 --------------------------------------------------------------------------------
 
@@ -266,14 +279,14 @@ instance Ord Term where
     (Integer i) `compare` (Integer i') =
         i `compare` i'
     (Integer i) `compare` (Float d') =
-        (fromIntegral i) `compare` d'
+        fromIntegral i `compare` d'
     (Integer _) `compare` _ =
         LT
 
     (Float d) `compare` (Float d') =
         d `compare` d'
     (Float d) `compare` (Integer i') =
-        d `compare` (fromIntegral i')
+        d `compare` fromIntegral i'
     (Float _) `compare` _ = LT
 
     (Atom a) `compare` (Atom a') =
@@ -282,22 +295,22 @@ instance Ord Term where
 
     (Reference node' id creation) `compare` (Reference node'' id' creation') =
         (node', id, creation) `compare` (node'', id', creation')
-    (Reference _ _ _) `compare` _ =
+    Reference{} `compare` _ =
         LT
 
     (NewReference node' creation ids) `compare` (NewReference node'' creation' ids') =
         (node', creation, ids) `compare` (node'', creation', ids')
-    (NewReference _ _ _) `compare` _ =
+    NewReference{} `compare` _ =
         LT
 
     (Port node' id creation) `compare` (Port node'' id' creation') =
         (node', id, creation) `compare` (node'', id', creation')
-    (Port _ _ _) `compare` _ =
+    Port{} `compare` _ =
         LT
 
     (Pid node' id serial creation) `compare` (Pid node'' id' serial' creation') =
         (node', id, serial, creation) `compare` (node'', id', serial', creation')
-    (Pid _ _ _ _) `compare` _ =
+    Pid{} `compare` _ =
         LT
 
     (Tuple v) `compare` (Tuple v') =
@@ -361,25 +374,22 @@ instance Show MapEntry where
     showsPrec _ MapEntry{key,value} =
         shows key . showString " => " . shows value
 
-showsVectorAsList :: Show a => (Vector a) -> ShowS
+showsVectorAsList :: Show a => Vector a -> ShowS
 showsVectorAsList v
-    | V.length v == 0 = \s -> s
-    | V.length v == 1 = shows (v ! 0)
-    | otherwise = shows (v ! 0)
-    . appEndo (foldMap (\t -> Endo (showChar ',' . shows t)) (V.tail v))
+  | V.length v == 0 = P.id
+  | V.length v == 1 = shows (v ! 0)
+  | otherwise =
+    shows (v ! 0) .
+    appEndo (foldMap (\t -> Endo (showChar ',' . shows t)) (V.tail v))
 
 showsByteStringAsIntList :: ByteString -> ShowS
 showsByteStringAsIntList b
-    | BS.length b == 0
-    = \s -> s
-    | BS.length b == 1
-    = shows (BS.head b)
-    | otherwise
-    = shows (BS.head b)
-        . appEndo
-              (foldMap (\t -> Endo (showChar ',' . shows t))
-                       (BS.unpack (BS.tail b))
-              )
+  | BS.length b == 0 = P.id
+  | BS.length b == 1 = shows (BS.head b)
+  | otherwise =
+    shows (BS.head b) .
+    appEndo
+      (foldMap (\t -> Endo (showChar ',' . shows t)) (BS.unpack (BS.tail b)))
 
 instance IsString Term where
     fromString = atom . CS.pack
@@ -659,50 +669,50 @@ ref
 ref = NewReference
 
 --------------------------------------------------------------------------------
-is_integer, is_float, is_atom, is_reference, is_port, is_pid, is_tuple, is_map, is_list, is_binary
+isInteger, isFloat, isAtom, isReference, isPort, isPid, isTuple, isMap, isList, isBinary
     :: Term -> Bool
 -- | Test if term is an integer
-is_integer (Integer _) = True
-is_integer _           = False
+isInteger (Integer _) = True
+isInteger _           = False
 
 -- | Test if term is a float
-is_float (Float _) = True
-is_float _         = False
+isFloat (Float _) = True
+isFloat _         = False
 
 -- | Test if term is an atom
-is_atom (Atom _) = True
-is_atom _        = False
+isAtom (Atom _) = True
+isAtom _        = False
 
 -- | Test if term is a reference
-is_reference (Reference    _ _ _) = True
-is_reference (NewReference _ _ _) = True
-is_reference _                    = False
+isReference Reference {} = True
+isReference NewReference {} = True
+isReference _                    = False
 
 -- | Test if term is a port
-is_port (Port _ _ _) = True
-is_port _            = False
+isPort Port {} = True
+isPort _            = False
 
 -- | Test if term is a pid
-is_pid (Pid _ _ _ _) = True
-is_pid _             = False
+isPid Pid {} = True
+isPid _             = False
 
 -- | Test if term is a tuple
-is_tuple (Tuple _) = True
-is_tuple _         = False
+isTuple (Tuple _) = True
+isTuple _         = False
 
 -- | Test if term is a map
-is_map (Map _) = True
-is_map _       = False
+isMap (Map _) = True
+isMap _       = False
 
 -- | Test if term is a list
-is_list Nil        = True
-is_list (String _) = True
-is_list (List _ _) = True
-is_list _          = False
+isList Nil        = True
+isList (String _) = True
+isList (List _ _) = True
+isList _          = False
 
 -- | Test if term is a binary
-is_binary (Binary _) = True
-is_binary _          = False
+isBinary (Binary _) = True
+isBinary _          = False
 
 --------------------------------------------------------------------------------
 node :: Term -> Term
@@ -712,9 +722,9 @@ node (Pid nodeName _id _serial _creation) = atom nodeName
 node (NewReference nodeName _creation _ids) = atom nodeName
 node term = error $ "Bad arg for node: " ++ show term
 
-atom_name :: Term -> ByteString
-atom_name (Atom name) = name
-atom_name term        = error $ "Bad arg for atom_name: " ++ show term
+atomName :: Term -> ByteString
+atomName (Atom name) = name
+atomName term        = error $ "Bad arg for atomName: " ++ show term
 
 length :: Term -> Int
 length (Tuple  v  ) = V.length v
@@ -726,38 +736,38 @@ element :: Int -> Term -> Term
 element n (Tuple v) = v ! (n - 1)
 element _ term      = error $ "Not a tuple: " ++ show term
 
-to_string :: Term -> Maybe ByteString
-to_string (String bs) = Just bs
-to_string _           = Nothing
+toString :: Term -> Maybe ByteString
+toString (String bs) = Just bs
+toString _           = Nothing
 
-to_integer :: Term -> Maybe Integer
-to_integer (Integer i) = Just i
-to_integer _           = Nothing
+toIntegerTerm :: Term -> Maybe Integer
+toIntegerTerm (Integer i) = Just i
+toIntegerTerm _           = Nothing
 
-match_tuple :: Term -> Maybe [Term]
-match_tuple (Tuple v) = Just (toList v)
-match_tuple _         = Nothing
+matchTuple :: Term -> Maybe [Term]
+matchTuple (Tuple v) = Just (toList v)
+matchTuple _         = Nothing
 
-match_atom :: Term -> ByteString -> Maybe ByteString
-match_atom (Atom n) m | m == n    = Just n
+matchAtom :: Term -> ByteString -> Maybe ByteString
+matchAtom (Atom n) m | m == n    = Just n
                       | otherwise = Nothing
-match_atom _ _ = Nothing
+matchAtom _ _ = Nothing
 
 --------------------------------------------------------------------------------
 instance Binary Term where
     put (Integer i)
         | i >= 0x00 && i <= 0xFF = do
-              putWord8 small_integer_ext
+              putWord8 smallIntegerExt
               putWord8 (fromIntegral i)
         | i >= -0x80000000 && i <= 0x7FFFFFFF = do
-              putWord8 integer_ext
+              putWord8 integerExt
               putWord32be (fromIntegral i)
         | otherwise =
             -- NOTE: the biggest number presentable is 2^maxBits bits long where
             -- maxBits = 2^32 * 8 = 2^35 - OTOH addressable main memory: 2^64 *
             -- 8 bits = 2^67 bits, even with tomorrows 2048 bit address buses
             -- for 256 bit words this would be at most 2^2056 addressable bits.
-            -- large_big_ext allows 2^(2^35) = 2^34359738368 addressable bits ..
+            -- largeBigIntegerExt allows 2^(2^35) = 2^34359738368 addressable bits ..
             -- hence YES by all practical means 'otherwise' is the correct
             -- function clause guard.
            do let digits = L.unfoldr takeLSB (abs i)
@@ -765,276 +775,192 @@ instance Binary Term where
                             | x == 0     = Nothing
                             | otherwise = Just (fromIntegral (x Data.Bits..&. 0xff), x `shiftR` 8)
               if L.length digits < 256
-                then do putWord8 small_big_ext
+                then do putWord8 smallBigIntegerExt
                         putWord8 (fromIntegral (L.length digits))
-                else do putWord8 large_big_ext
+                else do putWord8 largeBigIntegerExt
                         putWord32be (fromIntegral (L.length digits))
               putWord8 (if i >= 0 then 0 else 1)
               mapM_ putWord8 digits
 
     put (Float d) = do
-        putWord8 new_float_ext
+        putWord8 newFloatExt
         putDoublebe d
 
     put (Atom n) = putAtom n
 
     put (Reference nodeName id creation) = do
-        putWord8 reference_ext
+        putWord8 referenceExt
         putAtom nodeName
         putWord32be id
         putWord8 creation
 
     put (Port nodeName id creation) = do
-        putWord8 port_ext
+        putWord8 portExt
         putAtom nodeName
         putWord32be id
         putWord8 creation
 
     put (Pid nodeName id serial creation) = do
-        putWord8 pid_ext
+        putWord8 pidExt
         putAtom nodeName
         putWord32be id
         putWord32be serial
         putWord8 creation
 
     put (Tuple v)
-        | (V.length v) < 256 = do
-              putWord8 small_tuple_ext
+        | V.length v < 256 = do
+              putWord8 smallTupleExt
               putWord8 $ fromIntegral (V.length v)
               mapM_ put v
         | otherwise = do
-              putWord8 large_tuple_ext
+              putWord8 largeTupleExt
               putWord32be $ fromIntegral (V.length v)
               mapM_ put v
 
     put (Map e) = do
-        putWord8 map_ext
+        putWord8 mapExt
         putWord32be $ fromIntegral (V.length e)
         mapM_ put e
 
-    put Nil = putWord8 nil_ext
+    put Nil = putWord8 nilExt
 
     put (String s) = do
-        putWord8 string_ext
+        putWord8 stringExt
         putLength16beByteString s
 
     put (List v t) = do
-        putWord8 list_ext
+        putWord8 listExt
         putWord32be $ fromIntegral (V.length v)
         mapM_ put v
         put t
 
     put (Binary b) = do
-        putWord8 binary_ext
+        putWord8 binaryExt
         putLength32beByteString b
 
     put (NewReference node' creation ids) = do
-        putWord8 new_reference_ext
+        putWord8 newReferenceExt
         putWord16be $ fromIntegral (L.length ids)
         putAtom node'
         putWord8 creation
         mapM_ putWord32be ids
-    get = lookAhead getWord8 >>= get'
+
+    get = getWord8 >>= get'
       where
         get' :: Word8 -> Get Term
         get' tag
-            | tag == small_integer_ext =
-                  getSmallInteger (Integer . fromIntegral)
-            | tag == integer_ext = getInteger (Integer . toInteger . (fromIntegral :: Word32 -> Int32))
-            | tag == small_big_ext = getWord8 *> getWord8    >>= getBigInteger . fromIntegral
-            | tag == large_big_ext = getWord8 *> getWord32be >>= getBigInteger . fromIntegral
-            | tag == atom_ext = getAtom Atom
-            | tag == port_ext = getPort Port
-            | tag == pid_ext = getPid Pid
-            | tag == small_tuple_ext =
-                  getSmallTuple Tuple
-            | tag == large_tuple_ext =
-                  getLargeTuple Tuple
-            | tag == map_ext = getMap Map
-            | tag == nil_ext = getNil (const Nil)
-            | tag == string_ext = getString String
-            | tag == list_ext = getList List
-            | tag == binary_ext = getBinary Binary
-            | tag == new_reference_ext =
-                  getNewReference NewReference
-            | tag == small_atom_ext = getSmallAtom Atom
-            | tag == new_float_ext = getNewFloat Float
+            | tag == smallIntegerExt = Integer . fromIntegral <$> getWord8
+            | tag == integerExt = Integer . toInteger . (fromIntegral :: Word32 -> Int32) <$> getWord32be
+            | tag == smallBigIntegerExt = getWord8    >>= getBigInteger . fromIntegral
+            | tag == largeBigIntegerExt = getWord32be >>= getBigInteger . fromIntegral
+            | tag == atomExt = Atom <$> getLength16beByteString
+            | tag == portExt = matchWord8 atomExt *> (Port <$> getLength16beByteString <*> getWord32be <*> getWord8)
+            | tag == pidExt = matchWord8 atomExt *> (Pid <$> getLength16beByteString <*> getWord32be <*> getWord32be <*> getWord8)
+            | tag == smallTupleExt = Tuple <$> (getWord8 >>= _getVector . fromIntegral)
+            | tag == largeTupleExt = Tuple <$> (getWord32be >>= _getVector . fromIntegral)
+            | tag == mapExt = Map <$> (getWord32be >>= _getVector . fromIntegral)
+            | tag == nilExt = pure Nil
+            | tag == stringExt = String <$> getLength16beByteString
+            | tag == listExt = List <$> (getWord32be >>= _getVector . fromIntegral) <*> get
+            | tag == binaryExt = Binary <$> getLength32beByteString
+            | tag == newReferenceExt = do
+                      len <- getWord16be
+                      matchWord8 atomExt
+                      NewReference <$> getLength16beByteString <*> getWord8 <*> _getList (fromIntegral len)
+            | tag == smallAtomExt = Atom <$> getLength8ByteString
+            | tag == newFloatExt = Float <$> getDoublebe
             | otherwise = fail $ "Unsupported tag: " ++ show tag
 
 instance Binary MapEntry where
     put MapEntry{key,value} = do
         put key
         put value
-    get = do
-        MapEntry <$> get <*> get
+    get = MapEntry <$> get <*> get
 
 --------------------------------------------------------------------------------
-putTerm :: (ToTerm t) => t -> Put
-putTerm t = do
-    putWord8 magicVersion
-    put (toTerm t)
 
-putAtom :: ByteString -> Put
+putAtom :: HasCallStack => ByteString -> Put
 putAtom a = do
-    putWord8 atom_ext
+    putWord8 atomExt
     putLength16beByteString a
 
 --------------------------------------------------------------------------------
-getTerm :: Get Term
-getTerm = do
-    matchWord8 magicVersion
-    get
 
-getSmallInteger :: (Word8 -> a) -> Get a
-getSmallInteger f = do
-    matchWord8 small_integer_ext
-    f <$> getWord8
-
-getInteger :: (Word32 -> a) -> Get a
-getInteger f = do
-    matchWord8 integer_ext
-    f <$> getWord32be
-
-getBigInteger :: Int -> Get Term
+getBigInteger :: HasCallStack => Int -> Get Term
 getBigInteger len = mkBigInteger <$> getWord8 <*> getByteString len
   where
     mkBigInteger signByte bs = Integer
         ((if signByte == 0 then 1 else (-1)) * absInt)
         where absInt = BS.foldr' (\b acc -> 256 * acc + fromIntegral b) 0 bs
 
-getAtom :: (ByteString -> a) -> Get a
-getAtom f = do
-    matchWord8 atom_ext
-    f <$> getLength16beByteString
-
-getPort :: (ByteString -> Word32 -> Word8 -> a) -> Get a
-getPort f = do
-    matchWord8 port_ext
-    f <$> getAtom P.id <*> getWord32be <*> getWord8
-
-getPid :: (ByteString -> Word32 -> Word32 -> Word8 -> a) -> Get a
-getPid f = do
-    matchWord8 pid_ext
-    f <$> getAtom P.id <*> getWord32be <*> getWord32be <*> getWord8
-
-getSmallTuple :: (Vector Term -> a) -> Get a
-getSmallTuple f = do
-    matchWord8 small_tuple_ext
-    f <$> (getWord8 >>= _getVector . fromIntegral)
-
-getLargeTuple :: (Vector Term -> a) -> Get a
-getLargeTuple f = do
-    matchWord8 large_tuple_ext
-    f <$> (getWord32be >>= _getVector . fromIntegral)
-
-getMap :: (Vector MapEntry -> a) -> Get a
-getMap f = do
-    matchWord8 map_ext
-    f <$> (getWord32be >>= _getVector . fromIntegral)
-
-getNil :: (() -> a) -> Get a
-getNil f =
-    f <$> matchWord8 nil_ext
-
-getString :: (ByteString -> a) -> Get a
-getString f = do
-    matchWord8 string_ext
-    f <$> getLength16beByteString
-
-getList :: (Vector Term -> Term -> a) -> Get a
-getList f = do
-    matchWord8 list_ext
-    f <$> (getWord32be >>= _getVector . fromIntegral) <*> get
-
-getBinary :: (ByteString -> a) -> Get a
-getBinary f = do
-    matchWord8 binary_ext
-    f <$> getLength32beByteString
-
-getNewReference :: (ByteString -> Word8 -> [Word32] -> a) -> Get a
-getNewReference f = do
-    matchWord8 new_reference_ext
-    len <- getWord16be
-    f <$> getAtom P.id <*> getWord8 <*> _getList (fromIntegral len)
-
-getSmallAtom :: (ByteString -> a) -> Get a
-getSmallAtom f = do
-    matchWord8 small_atom_ext
-    f <$> getLength8ByteString
-
-getNewFloat :: (Double -> a) -> Get a
-getNewFloat f = do
-    matchWord8 new_float_ext
-    f <$> getDoublebe
-
 --------------------------------------------------------------------------------
-_getVector :: Binary a => Int -> Get (Vector a)
+_getVector :: HasCallStack => Binary a => Int -> Get (Vector a)
 _getVector len = V.replicateM len get
 
-_getList :: Binary a => Int -> Get [a]
+_getList :: HasCallStack => Binary a => Int -> Get [a]
 _getList len = M.replicateM len get
 
 --------------------------------------------------------------------------------
 magicVersion :: Word8
 magicVersion = 131
 
-small_integer_ext, integer_ext, float_ext, atom_ext, reference_ext, port_ext, pid_ext
+smallIntegerExt, integerExt, floatExt, atomExt, referenceExt, portExt, pidExt
     :: Word8
-small_tuple_ext, large_tuple_ext, map_ext, nil_ext, string_ext, list_ext, binary_ext
+smallTupleExt, largeTupleExt, mapExt, nilExt, stringExt, listExt, binaryExt
     :: Word8
-small_big_ext, large_big_ext, new_reference_ext, small_atom_ext, fun_ext, new_fun_ext
+smallBigIntegerExt, largeBigIntegerExt, newReferenceExt, smallAtomExt, functionExt, newFunctionExt
     :: Word8
-export_ext, bit_binary_ext, new_float_ext, atom_utf8_ext, small_atom_utf8_ext
+exportExt, bitBinaryExt, newFloatExt, atomUtf8Ext, smallAtomUtf8Ext
     :: Word8
-small_integer_ext = 97
+smallIntegerExt = 97
 
-integer_ext = 98
+integerExt = 98
 
-float_ext = 99
+floatExt = 99
 
-atom_ext = 100
+atomExt = 100
 
-reference_ext = 101
+referenceExt = 101
 
-port_ext = 102
+portExt = 102
 
-pid_ext = 103
+pidExt = 103
 
-small_tuple_ext = 104
+smallTupleExt = 104
 
-large_tuple_ext = 105
+largeTupleExt = 105
 
-map_ext = 116
+mapExt = 116
 
-nil_ext = 106
+nilExt = 106
 
-string_ext = 107
+stringExt = 107
 
-list_ext = 108
+listExt = 108
 
-binary_ext = 109
+binaryExt = 109
 
-small_big_ext = 110
+smallBigIntegerExt = 110
 
-large_big_ext = 111
+largeBigIntegerExt = 111
 
-new_reference_ext = 114
+newReferenceExt = 114
 
-small_atom_ext = 115
+smallAtomExt = 115
 
-fun_ext = 117
+functionExt = 117
 
-new_fun_ext = 112
+newFunctionExt = 112
 
-export_ext = 113
+exportExt = 113
 
-bit_binary_ext = 77
+bitBinaryExt = 77
 
-new_float_ext = 70
+newFloatExt = 70
 
-atom_utf8_ext = 118
+atomUtf8Ext = 118
 
-small_atom_utf8_ext = 119
+smallAtomUtf8Ext = 119
 
 instance Arbitrary Term where
     arbitrary = oneof [ atom <$> scale (`div` 2) arbitraryUnquotedAtom
@@ -1051,6 +977,7 @@ instance Arbitrary Term where
                       , (toTerm :: Pid -> Term) <$> scale smaller arbitrary
                       , float <$> scale smaller arbitrary
                       , (toTerm :: Integer -> Term) <$> scale smaller arbitrary
+                      , Binary . pack <$> arbitrary
                       ]
 
 smaller :: (Eq a, Num a) => a -> a
@@ -1059,7 +986,7 @@ smaller n = n - 1
 
 arbitraryUnquotedAtom :: Gen CS.ByteString
 arbitraryUnquotedAtom =
-    CS.pack <$> (listOf1 (elements (['a' .. 'z'] ++ ['_'] ++ ['0' .. '9'])))
+  CS.pack <$> listOf1 (elements (['a' .. 'z'] ++ ['_'] ++ ['0' .. '9']))
 
 instance Arbitrary Pid where
     arbitrary = pid <$> scale smaller arbitraryUnquotedAtom

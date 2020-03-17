@@ -37,31 +37,31 @@ instance Binary ControlMessage where
       where
         put' TICK = fail "Unreachable code"
 
-        put' (LINK fromPid toPid) = do
-            putTerm (linkTag, fromPid, toPid)
+        put' (LINK fromPid toPid) =
+            put (MkExternalTerm (toTerm (linkTag, fromPid, toPid)))
 
         put' (SEND toPid message) = do
-            putTerm (sendTag, unused, toPid)
-            putTerm message
+            put (MkExternalTerm (toTerm (sendTag, unused, toPid)))
+            put (MkExternalTerm (toTerm message))
 
-        put' (EXIT fromPid toPid reason) = do
-            putTerm (exitTag, fromPid, toPid, reason)
+        put' (EXIT fromPid toPid reason) =
+            put (MkExternalTerm (toTerm (exitTag, fromPid, toPid, reason)))
 
-        put' (UNLINK fromPid toPid) = do
-            putTerm (unlinkTag, fromPid, toPid)
+        put' (UNLINK fromPid toPid) =
+            put (MkExternalTerm (toTerm (unlinkTag, fromPid, toPid)))
 
-        put' NODE_LINK = do
-            putTerm (Tuple1 nodeLinkTag)
+        put' NODE_LINK =
+            put (MkExternalTerm (toTerm (Tuple1 nodeLinkTag)))
 
         put' (REG_SEND fromPid toName message) = do
-            putTerm (regSendTag, fromPid, unused, toName)
-            putTerm message
+            put (MkExternalTerm (toTerm (regSendTag, fromPid, unused, toName)))
+            put (MkExternalTerm (toTerm message))
 
-        put' (GROUP_LEADER fromPid toPid) = do
-            putTerm (groupLeaderTag, fromPid, toPid)
+        put' (GROUP_LEADER fromPid toPid) =
+            put (MkExternalTerm (toTerm (groupLeaderTag, fromPid, toPid)))
 
-        put' (EXIT2 fromPid toPid reason) = do
-            putTerm (exit2Tag, fromPid, toPid, reason)
+        put' (EXIT2 fromPid toPid reason) =
+            put (MkExternalTerm (toTerm (exit2Tag, fromPid, toPid, reason)))
     get = do
         expectedLen <- getWord32be
         if expectedLen == 0
@@ -72,15 +72,15 @@ instance Binary ControlMessage where
                 controlMessage <- get'
                 pos1 <- bytesRead
                 let actualLen = pos1 - pos0
-                if (fromIntegral expectedLen) == actualLen
-                    then do
+                if fromIntegral expectedLen == actualLen
+                    then
                         return controlMessage
-                    else do
+                    else
                         fail "Bad control message length"
       where
         badControlMsg term = fail ("Bad control message: " ++ show term)
         get' = do
-            term <- getTerm
+            MkExternalTerm term <- get
             res <- runMaybeT $ get'' term
             maybe (badControlMsg term) return res
           where
@@ -99,7 +99,7 @@ instance Binary ControlMessage where
                     return (LINK p2 p3)
                 getSEND = do
                     (_ :: TsendTag, _ :: Term, p1) <- fromTermA term
-                    message <- lift getTerm
+                    MkExternalTerm message <- lift get
                     return (SEND p1 message)
                 getEXIT = do
                     (_ :: TexitTag, p2, p3, p4) <- fromTermA term
@@ -112,7 +112,7 @@ instance Binary ControlMessage where
                     return NODE_LINK
                 getREG_SEND = do
                     (_ :: TregSendTag, p2, _p3 :: Term, p4) <- fromTermA term
-                    message <- lift getTerm
+                    MkExternalTerm message <- lift get
                     return (REG_SEND p2 p4 message)
                 getGROUP_LEADER = do
                     (_ :: TgroupLeaderTag, p2, p3) <- fromTermA term

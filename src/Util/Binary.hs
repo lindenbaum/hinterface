@@ -41,9 +41,10 @@ import           Data.Word
 import           Util.FloatCast
 #endif
 import           Util.IOExtra
+import GHC.Stack (HasCallStack)
 
 --------------------------------------------------------------------------------
-runGetA :: (Monad m)
+runGetA :: (HasCallStack, Monad m)
         => (Int -> m BS.ByteString)
         -> (BS.ByteString -> m ())
         -> Get a
@@ -68,7 +69,7 @@ data BinaryGetError = BinaryGetError { position :: Int64
 
 instance Exception BinaryGetError
 
-runPutA :: (LBS.ByteString -> m ()) -> Put -> m ()
+runPutA :: HasCallStack => (LBS.ByteString -> m ()) -> Put -> m ()
 runPutA = (. runPut)
 
 #if !MIN_VERSION_binary(0,8,5)
@@ -76,62 +77,62 @@ runPutA = (. runPut)
 ------------------------------------------------------------------------
 -- Floats/Doubles
 -- | Write a 'Float' in big endian IEEE-754 format.
-putFloatbe :: Float -> Put
+putFloatbe :: HasCallStack => Float -> Put
 putFloatbe = putWord32be . floatToWord
 
 {-# INLINE putFloatbe #-}
 
 -- | Write a 'Float' in little endian IEEE-754 format.
-putFloatle :: Float -> Put
+putFloatle :: HasCallStack => Float -> Put
 putFloatle = putWord32le . floatToWord
 
 {-# INLINE putFloatle #-}
 
 -- | Write a 'Float' in native in IEEE-754 format and host endian.
-putFloathost :: Float -> Put
+putFloathost :: HasCallStack => Float -> Put
 putFloathost = putWord32host . floatToWord
 
 {-# INLINE putFloathost #-}
 
 -- | Write a 'Double' in big endian IEEE-754 format.
-putDoublebe :: Double -> Put
+putDoublebe :: HasCallStack => Double -> Put
 putDoublebe = putWord64be . doubleToWord
 
 {-# INLINE putDoublebe #-}
 
 -- | Write a 'Double' in little endian IEEE-754 format.
-putDoublele :: Double -> Put
+putDoublele :: HasCallStack => Double -> Put
 putDoublele = putWord64le . doubleToWord
 
 {-# INLINE putDoublele #-}
 
 -- | Write a 'Double' in native in IEEE-754 format and host endian.
-putDoublehost :: Double -> Put
+putDoublehost :: HasCallStack => Double -> Put
 putDoublehost = putWord64host . doubleToWord
 
 {-# INLINE putDoublehost #-}
 #endif
 
 --------------------------------------------------------------------------------
-putLength16beByteString :: BS.ByteString -> Put
+putLength16beByteString :: HasCallStack => BS.ByteString -> Put
 putLength16beByteString bs = do
     putWord16be (fromIntegral (BS.length bs))
     putByteString bs
 
-putLength32beByteString :: BS.ByteString -> Put
+putLength32beByteString :: HasCallStack => BS.ByteString -> Put
 putLength32beByteString bs = do
     putWord32be (fromIntegral (BS.length bs))
     putByteString bs
 
 --------------------------------------------------------------------------------
-putWithLength16be :: Put -> Put
+putWithLength16be :: HasCallStack => Put -> Put
 putWithLength16be putA = do
     let bl = runPut putA
         len = LBS.length bl
     putWord16be (fromIntegral len)
     putLazyByteString bl
 
-putWithLength32be :: Put -> Put
+putWithLength32be :: HasCallStack => Put -> Put
 putWithLength32be putA = do
     let bl = runPut putA
         len = LBS.length bl
@@ -139,67 +140,66 @@ putWithLength32be putA = do
     putLazyByteString bl
 
 --------------------------------------------------------------------------------
-putChar8 :: Char -> Put
-putChar8 c = do
-    putWord8 $ fromIntegral $ ord c
+putChar8 :: HasCallStack => Char -> Put
+putChar8 = putWord8 . fromIntegral . ord
 
-getChar8 :: Get Char
-getChar8 = (chr . fromIntegral) <$> getWord8
+getChar8 :: HasCallStack => Get Char
+getChar8 = chr . fromIntegral <$> getWord8
 
 #if !MIN_VERSION_binary(0,8,5)
 ------------------------------------------------------------------------
 -- Double/Float reads
 -- | Read a 'Float' in big endian IEEE-754 format.
-getFloatbe :: Get Float
+getFloatbe :: HasCallStack => Get Float
 getFloatbe = wordToFloat <$> getWord32be
 
 {-# INLINE getFloatbe #-}
 
 -- | Read a 'Float' in little endian IEEE-754 format.
-getFloatle :: Get Float
+getFloatle :: HasCallStack => Get Float
 getFloatle = wordToFloat <$> getWord32le
 
 {-# INLINE getFloatle #-}
 
 -- | Read a 'Float' in IEEE-754 format and host endian.
-getFloathost :: Get Float
+getFloathost :: HasCallStack => Get Float
 getFloathost = wordToFloat <$> getWord32host
 
 {-# INLINE getFloathost #-}
 
 -- | Read a 'Double' in big endian IEEE-754 format.
-getDoublebe :: Get Double
+getDoublebe :: HasCallStack => Get Double
 getDoublebe = wordToDouble <$> getWord64be
 
 {-# INLINE getDoublebe #-}
 
 -- | Read a 'Double' in little endian IEEE-754 format.
-getDoublele :: Get Double
+getDoublele :: HasCallStack => Get Double
 getDoublele = wordToDouble <$> getWord64le
 
 {-# INLINE getDoublele #-}
 
 -- | Read a 'Double' in IEEE-754 format and host endian.
-getDoublehost :: Get Double
+getDoublehost :: HasCallStack => Get Double
 getDoublehost = wordToDouble <$> getWord64host
 
 {-# INLINE getDoublehost #-}
 #endif
 
 --------------------------------------------------------------------------------
-getLength8ByteString :: Get BS.ByteString
+getLength8ByteString :: HasCallStack => Get BS.ByteString
 getLength8ByteString = getWord8 >>= getByteString . fromIntegral
 
-getLength16beByteString :: Get BS.ByteString
+getLength16beByteString :: HasCallStack => Get BS.ByteString
 getLength16beByteString =
     getWord16be >>= getByteString . fromIntegral
 
-getLength32beByteString :: Get BS.ByteString
+getLength32beByteString :: HasCallStack => Get BS.ByteString
 getLength32beByteString =
     getWord32be >>= getByteString . fromIntegral
 
 --------------------------------------------------------------------------------
-getWithLength16be :: Get a -> Get (a, Word16)
+getWithLength16be :: HasCallStack => Get a -> Get (a, Word16)
 getWithLength16be getA = do
     pos0 <- bytesRead
     res <- getA
@@ -207,11 +207,10 @@ getWithLength16be getA = do
     return (res, fromIntegral (pos1 - pos0))
 
 --------------------------------------------------------------------------------
-matchWord8 :: Word8 -> Get ()
+matchWord8 :: HasCallStack => Word8 -> Get ()
 matchWord8 expected = do
     actual <- getWord8
     if expected == actual then return () else fail $ "expected " ++ show expected ++ ", actual " ++ show actual
 
-matchChar8 :: Char -> Get ()
-matchChar8 expected = do
-    matchWord8 $ fromIntegral $ ord expected
+matchChar8 :: HasCallStack => Char -> Get ()
+matchChar8 = matchWord8 . fromIntegral . ord
