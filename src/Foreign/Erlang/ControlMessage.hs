@@ -35,7 +35,7 @@ instance Binary ControlMessage where
         putWord8 pass_through
         put' controlMessage
       where
-        put' TICK = fail "Unreachable code"
+        put' TICK = error "Unreachable code"
 
         put' (LINK fromPid toPid) =
             put (MkExternalTerm (toTerm (linkTag, fromPid, toPid)))
