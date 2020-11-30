@@ -1,5 +1,5 @@
 name:                hinterface
-version:             2.0.0
+version:             2.0.1
 synopsis:            Haskell / Erlang interoperability library
 description:         A library for building nodes of a distributed Erlang system in Haskell.
 
@@ -18,7 +18,7 @@ maintainer:          timo.koepke@googlemail.com, sven.heyll@gmail.com
 copyright:           2016-2020 Timo Koepke, Sven Heyll
 category:            Language
 build-type:          Simple
-extra-source-files:  README.md, stack.yaml, .travis.yml, Setup.hs, .gitignore
+extra-source-files:  README.md, .travis.yml, Setup.hs, .gitignore, cabal.project
 cabal-version:       >=1.22
 
 library
@@ -83,10 +83,11 @@ test-suite hinterface-test
                      , binary
                      , bytestring
                      , hinterface
-                     , hspec >= 2.4 && < 2.8
+                     , hspec >= 2.4 && < 4
                      , monad-logger
                      , transformers
                      , vector
+  build-tool-depends: hspec-discover:hspec-discover
   other-modules:       Foreign.Erlang.NodeDataSpec
                      , Foreign.Erlang.HandshakeSpec
                      , Foreign.Erlang.ControlMessageSpec
