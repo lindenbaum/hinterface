@@ -1,5 +1,5 @@
 name:                hinterface
-version:             2.0.1
+version:             2.0.2
 synopsis:            Haskell / Erlang interoperability library
 description:         A library for building nodes of a distributed Erlang system in Haskell.
 
@@ -84,10 +84,13 @@ test-suite hinterface-test
                      , bytestring
                      , hinterface
                      , hspec >= 2.4 && < 4
+                     -- added here because of https://github.com/input-output-hk/haskell.nix/issues/231
+                     , hspec-discover 
                      , monad-logger
                      , transformers
                      , vector
-  build-tool-depends: hspec-discover:hspec-discover
+  -- commented out because of https://github.com/input-output-hk/haskell.nix/issues/231                     
+  -- build-tool-depends: hspec-discover:hspec-discover 
   other-modules:       Foreign.Erlang.NodeDataSpec
                      , Foreign.Erlang.HandshakeSpec
                      , Foreign.Erlang.ControlMessageSpec

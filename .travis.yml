@@ -1,2 +1,11 @@
 language: nix
-script: nix build
+env:
+  NIX_CONF_DIR: /tmp
+before_install:
+  - | 
+      cat > ${NIX_CONF_DIR}/nix.conf <<EOF
+      trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.nixos.org-1:CNHJZBh9K4tP3EKF6FkkgeVYsS3ohTl+oS0Qa8bezVs=
+      substituters = https://cache.nixos.org https://hydra.iohk.io
+      EOF
+script: 
+   - nix build -L --cores 0 -f default.nix hinterface.checks

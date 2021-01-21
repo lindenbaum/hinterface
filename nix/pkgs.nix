@@ -25,7 +25,20 @@ let
     {
       overlays =
         haskellDotNix.nixpkgsArgs.overlays
-        ++ import ./overlay.nix sources;
+        ++
+        [
+          (self: super:
+            {
+              # Reflect the sources
+              # ===================
+              inherit sources;
+
+              # For updating dependencies
+              niv = (import sources.niv { pkgs = super; }).niv;
+
+            })
+        ];
+
       config =
         haskellDotNix.nixpkgsArgs.config
         // crossConfig
