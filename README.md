@@ -1,4 +1,4 @@
-![Build Status](https://github.com/lindenbaum/hinterface/workflows/.github/workflows/test.yml/badge.svg?branch=master)
+![Build Status](https://github.com/lindenbaum/hinterface/workflows/.github/workflows/test.yml/badge.svg)
 
 [![Old Build Status (TRAVIS)](https://travis-ci.org/lindenbaum/hinterface.svg?branch=master)](https://travis-ci.org/lindenbaum/hinterface)
 
