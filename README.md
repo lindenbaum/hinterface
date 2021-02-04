@@ -1,4 +1,7 @@
-[![Build Status](https://travis-ci.org/lindenbaum/hinterface.svg?branch=master)](https://travis-ci.org/lindenbaum/hinterface)
+![Build Status](https://github.com/lindenbaum/hinterface/.github/workflows/test.yml/badge.svg?branch=master)
+
+[![Old Build Status (TRAVIS)](https://travis-ci.org/lindenbaum/hinterface.svg?branch=master)](https://travis-ci.org/lindenbaum/hinterface)
+
 [![Hackage](https://img.shields.io/hackage/v/hinterface)](http://hackage.haskell.org/package/hinterface)
 
 # hinterface - Haskell / Erlang interoperability library
