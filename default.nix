@@ -8,7 +8,7 @@ let
         src = ./.;
       };
       projectFileName = "cabal.project";
-      compiler-nix-name = "ghc8103";
+      compiler-nix-name = "ghc8105";
       pkg-def-extras = [ ];
       modules = [{
         packages.hinterface.doCoverage = true;

@@ -5,22 +5,10 @@
         "homepage": "https://input-output-hk.github.io/haskell.nix",
         "owner": "input-output-hk",
         "repo": "haskell.nix",
-        "rev": "9f774325bc43c405802232bf29a8ce1c2f48bb75",
-        "sha256": "0pkw3ayzfwqf0cnv8cf8sbmhlfqadz2804iv43i9z37ryajcvvh0",
+        "rev": "59e14e256ef8d1ec35e083bc209d355913c4e725",
+        "sha256": "038rz3w92zqkr0aclhxb0zif762j2a7b0xr6y3mxr0bivgbmpigw",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/haskell.nix/archive/9f774325bc43c405802232bf29a8ce1c2f48bb75.tar.gz",
-        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
-    },
-    "niv": {
-        "branch": "master",
-        "description": "Easy dependency management for Nix projects",
-        "homepage": "https://github.com/nmattia/niv",
-        "owner": "nmattia",
-        "repo": "niv",
-        "rev": "3cd7914b2c4cff48927e11c216dadfab7d903fe5",
-        "sha256": "1agq4nvbhrylf2s77kb4xhh9k7xcwdwggq764k4jgsbs70py8cw3",
-        "type": "tarball",
-        "url": "https://github.com/nmattia/niv/archive/3cd7914b2c4cff48927e11c216dadfab7d903fe5.tar.gz",
+        "url": "https://github.com/input-output-hk/haskell.nix/archive/59e14e256ef8d1ec35e083bc209d355913c4e725.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     }
 }

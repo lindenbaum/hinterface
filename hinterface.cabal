@@ -1,5 +1,6 @@
+cabal-version:       2.4
 name:                hinterface
-version:             2.0.2
+version:             2.1.0
 synopsis:            Haskell / Erlang interoperability library
 description:         A library for building nodes of a distributed Erlang system in Haskell.
 
@@ -11,15 +12,14 @@ description:         A library for building nodes of a distributed Erlang system
                      and a subset of the distribution protocol.
 
 homepage:            https://github.com/lindenbaum/hinterface
-license:             BSD3
+license:             BSD-3-Clause
 license-file:        LICENSE
 author:              Timo Koepke, Sven Heyll
 maintainer:          timo.koepke@googlemail.com, sven.heyll@gmail.com
-copyright:           2016-2020 Timo Koepke, Sven Heyll
+copyright:           2016-2021 Timo Koepke, Sven Heyll
 category:            Language
 build-type:          Simple
-extra-source-files:  README.md, .travis.yml, Setup.hs, .gitignore, cabal.project
-cabal-version:       >=1.22
+extra-source-files:  README.md, Setup.hs, .gitignore, cabal.project
 
 library
   hs-source-dirs:      src
@@ -45,31 +45,31 @@ library
                      , PatternSynonyms
                      , ViewPatterns
   ghc-options:         -Wall -funbox-strict-fields
-  build-depends:       QuickCheck >=2.11 && <2.14
-                     , array >=0.5.2.0 && <0.6
-                     , async >=2.2.1 && <2.3
-                     , base >= 4.12 && < 5
-                     , binary >=0.8.5.1 && <0.9
-                     , bytestring >=0.10.8.2 && <0.11
-                     , containers >=0.5.11.0 && <0.7
+  build-depends:       QuickCheck
+                     , array
+                     , async
+                     , base ^>= 4.14
+                     , binary
+                     , bytestring
+                     , containers
                      , cryptonite == 0.26.*
-                     , deepseq >= 1.4 && <1.5
-                     , exceptions >=0.10.0 && <0.11
-                     , lifted-async >=0.10.0.2 && <0.11
-                     , lifted-base >=0.2.3.12 && <0.3
+                     , deepseq
+                     , exceptions
+                     , lifted-async
+                     , lifted-base
                      , memory == 0.15.*
-                     , monad-control >=1.0.2.3 && <1.1
-                     , monad-logger >=0.3.29 && <0.4
-                     , mtl >=2.2.2 && <2.3
-                     , network == 3.1.1.*
-                     , random ==1.1.*
-                     , resourcet >=1.2.1 && <1.3
-                     , safe-exceptions >=0.1.7.0 && <0.2
-                     , stm >=2.4.5.0 && <2.6
-                     , text >=1.2.3.0 && <1.3
-                     , transformers >=0.5.5.0 && <0.6
-                     , transformers-base >=0.4.5.2 && <0.5
-                     , vector >=0.12.0.1 && <0.13
+                     , monad-control
+                     , monad-logger
+                     , mtl
+                     , network
+                     , random
+                     , resourcet
+                     , safe-exceptions
+                     , stm
+                     , text
+                     , transformers
+                     , transformers-base
+                     , vector <13
 
   default-language:    Haskell2010
 
@@ -77,20 +77,20 @@ test-suite hinterface-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-  build-depends:       QuickCheck >=2.11.3 && <2.14
+  build-depends:       QuickCheck
                      , async
-                     , base >= 4.12 && < 5
+                     , base ^>= 4.14
                      , binary
                      , bytestring
                      , hinterface
-                     , hspec >= 2.4 && < 4
+                     , hspec
                      -- added here because of https://github.com/input-output-hk/haskell.nix/issues/231
-                     , hspec-discover 
+                     , hspec-discover
                      , monad-logger
                      , transformers
                      , vector
-  -- commented out because of https://github.com/input-output-hk/haskell.nix/issues/231                     
-  -- build-tool-depends: hspec-discover:hspec-discover 
+  -- commented out because of https://github.com/input-output-hk/haskell.nix/issues/231
+  -- build-tool-depends: hspec-discover:hspec-discover
   other-modules:       Foreign.Erlang.NodeDataSpec
                      , Foreign.Erlang.HandshakeSpec
                      , Foreign.Erlang.ControlMessageSpec
