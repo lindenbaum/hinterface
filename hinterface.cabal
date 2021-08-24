@@ -1,6 +1,6 @@
 cabal-version:       2.4
 name:                hinterface
-version:             2.2.0
+version:             3.0.0
 synopsis:            Haskell / Erlang interoperability library
 description:         A library for building nodes of a distributed Erlang system in Haskell.
 
