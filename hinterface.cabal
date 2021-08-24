@@ -1,6 +1,6 @@
 cabal-version:       2.4
 name:                hinterface
-version:             2.1.0
+version:             2.2.0
 synopsis:            Haskell / Erlang interoperability library
 description:         A library for building nodes of a distributed Erlang system in Haskell.
 
@@ -55,20 +55,17 @@ library
                      , cryptonite == 0.26.*
                      , deepseq
                      , exceptions
-                     , lifted-async
-                     , lifted-base
                      , memory == 0.15.*
-                     , monad-control
                      , monad-logger
                      , mtl
                      , network
                      , random
                      , resourcet
-                     , safe-exceptions
                      , stm
                      , text
                      , transformers
                      , transformers-base
+                     , unliftio
                      , vector <13
 
   default-language:    Haskell2010
@@ -87,8 +84,10 @@ test-suite hinterface-test
                      -- added here because of https://github.com/input-output-hk/haskell.nix/issues/231
                      , hspec-discover
                      , monad-logger
+                     , resourcet
                      , transformers
                      , vector
+                     , unliftio
   -- commented out because of https://github.com/input-output-hk/haskell.nix/issues/231
   -- build-tool-depends: hspec-discover:hspec-discover
   other-modules:       Foreign.Erlang.NodeDataSpec
@@ -130,7 +129,7 @@ test-suite hinterface-test
                      , IncoherentInstances
                      , Strict
                      , StrictData
-  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N -O1
   default-language:    Haskell2010
 
 source-repository head
