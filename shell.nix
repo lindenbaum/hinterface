@@ -5,9 +5,8 @@ in
   packages = p: [ p.hinterface ];
   withHoogle = true;
   tools = {
-    cabal = "latest";
-    ormolu = "latest";
-    haskell-language-server = "latest";
+    cabal = {};
+    haskell-language-server = {};
   };
   buildInputs = with pkgs.haskellPackages;
     [
