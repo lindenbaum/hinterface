@@ -1,5 +1,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE Strict #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use camelCase" #-}
 
 module Foreign.Erlang.NodeState
   ( NodeState (),
@@ -26,6 +28,7 @@ import Data.Word
 import Text.Printf (printf)
 import UnliftIO
 import Util.IOExtra (logInfoStr)
+import Control.Concurrent.STM.TVar (stateTVar)
 
 -- import           Util.IOExtra
 
@@ -142,15 +145,9 @@ _28bits = 0x0fffffff
 _32bits = 0xffffffff
 
 inc :: TVar Word32 -> Word32 -> STM Bool
-inc tV maxV = do
-  modifyTVar' tV (+ 1)
-  v <- readTVar tV
-  if v > maxV
-    then do
-      writeTVar tV 0
-      return True
-    else do
-      return False
+inc tV maxV =
+  stateTVar tV $ \v ->
+    if v == maxV then (True, 0) else (False, v + 1)
 
 whenM :: Monad m => m Bool -> m () -> m ()
 whenM mt mc = do

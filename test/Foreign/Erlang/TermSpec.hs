@@ -43,6 +43,24 @@ spec = do
       withMaxSuccess 40 $ \x y z ->
         let p = pid "nodename" x y z
          in fromTerm (decode (encode (toTerm p))) `shouldBe` Just p
+  describe "NewPid" $ do
+    it "can be shown" $
+      show (long_pid "nodename" 1 2 3) `shouldContain` "nodename"
+    it "can be shown as term" $
+      show (toTerm (long_pid "nodename" 1 2 3)) `shouldContain` "nodename"
+    it "can be compared" $
+      long_pid "nodename" 1 2 3 >= long_pid "modename" 0 1 2 `shouldBe` True
+    it "satisfies is_pid" $
+      isPid (toTerm (long_pid "nodename" 1 2 3)) `shouldBe` True
+    it "has a node part" $
+      node (toTerm (long_pid "nodename" 1 2 3)) `shouldBe` "nodename"
+    it "has a Binary instance such that decode is the inverse of encode" $
+      withMaxSuccess 40 $ \(p :: Pid) ->
+        fromTerm (decode (encode (toTerm p))) `shouldBe` Just p
+    it "represents all valid Erlang pids" $
+      withMaxSuccess 40 $ \x y z ->
+        let p = long_pid "nodename" x y z
+         in fromTerm (decode (encode (toTerm p))) `shouldBe` Just p
   describe "FromTerm/ToTerm" $ do
     it "converts '[Integer]' back and forth" $
       withMaxSuccess 40 $ \(xs :: [Integer]) -> fromTerms (toTerms xs) `shouldBe` Just xs

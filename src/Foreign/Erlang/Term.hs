@@ -2,12 +2,13 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE Strict #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use camelCase" #-}
 
 module Foreign.Erlang.Term
   ( ExternalTerm (..),
@@ -52,11 +53,13 @@ module Foreign.Erlang.Term
     SInteger (..),
     float,
     atom,
+    atomUtf8,
 
     -- *** Static atoms
     SAtom (..),
     port,
     pid,
+    long_pid,
     Pid (..),
     tuple,
     Tuple1 (..),
@@ -168,9 +171,12 @@ data Term
   = Integer Integer
   | Float Double
   | Atom ByteString
+  | AtomUtf8 ByteString
+  | SmallAtomUtf8 ByteString
   | Reference ByteString Word32 Word8
   | Port ByteString Word32 Word8
   | Pid ByteString Word32 Word32 Word8
+  | NewPid ByteString Word32 Word32 Word32
   | Tuple (Vector Term)
   | Map (Vector MapEntry)
   | Nil
@@ -387,6 +393,12 @@ instance Ord Term where
   (Atom a) `compare` (Atom a') =
     a `compare` a'
   (Atom _) `compare` _ = LT
+  (AtomUtf8 a) `compare` (AtomUtf8 a') =
+    a `compare` a'
+  (AtomUtf8 _) `compare` _ = LT
+  (SmallAtomUtf8 a) `compare` (SmallAtomUtf8 a') =
+    a `compare` a'
+  (SmallAtomUtf8 _) `compare` _ = LT
   (Reference node' id creation) `compare` (Reference node'' id' creation') =
     (node', id, creation) `compare` (node'', id', creation')
   Reference {} `compare` _ =
@@ -398,6 +410,10 @@ instance Ord Term where
   (Port node' id creation) `compare` (Port node'' id' creation') =
     (node', id, creation) `compare` (node'', id', creation')
   Port {} `compare` _ =
+    LT
+  (NewPid node' id serial creation) `compare` (NewPid node'' id' serial' creation') =
+    (node', id, serial, creation) `compare` (node'', id', serial', creation')
+  NewPid {} `compare` _ =
     LT
   (Pid node' id serial creation) `compare` (Pid node'' id' serial' creation') =
     (node', id, serial, creation) `compare` (node'', id', serial', creation')
@@ -439,11 +455,15 @@ instance Show Term where
   showsPrec _ (Integer i) = shows i
   showsPrec _ (Float d) = shows d
   showsPrec _ (Atom a) = showChar '\'' . showString (unpack a) . showChar '\''
+  showsPrec _ (AtomUtf8 a) = showChar '\'' . showString (unpack a) . showChar '\''
+  showsPrec _ (SmallAtomUtf8 a) = showChar '\'' . showString (unpack a) . showChar '\''
   showsPrec _ (Reference nodeName id _creation) =
     showString "#Ref<" . showString (unpack nodeName) . showChar '.' . shows id . showChar '>'
   showsPrec _ (Port nodeName id _creation) =
     showString "#Port<" . showString (unpack nodeName) . showChar '.' . shows id . showChar '>'
   showsPrec _ (Pid nodeName id serial _creation) =
+    showString "#Pid<" . showString (unpack nodeName) . showChar '.' . shows id . showChar '.' . shows serial . showChar '>'
+  showsPrec _ (NewPid nodeName id serial _creation) =
     showString "#Pid<" . showString (unpack nodeName) . showChar '.' . shows id . showChar '.' . shows serial . showChar '>'
   showsPrec _ (Tuple v) = showChar '{' . showsVectorAsList v . showChar '}'
   showsPrec _ (Map e) = showString "#{" . showsVectorAsList e . showChar '}'
@@ -679,6 +699,13 @@ atom ::
   Term
 atom = Atom
 
+-- | Construct an atom with utf-8 support
+atomUtf8 ::
+  -- | AtomName
+  ByteString ->
+  Term
+atomUtf8 = AtomUtf8
+
 -- | A static/constant atom.
 data SAtom (atom :: Symbol) = SAtom
 
@@ -717,6 +744,18 @@ pid ::
   Word8 ->
   Pid
 pid = ((.) . (.) . (.) . (.)) MkPid Pid
+
+long_pid ::
+  -- | Node name
+  ByteString ->
+  -- | ID
+  Word32 ->
+  -- | Serial
+  Word32 ->
+  -- | Creation
+  Word32 ->
+  Pid
+long_pid = ((.) . (.) . (.) . (.)) MkPid NewPid
 
 newtype Pid = MkPid Term
   deriving (ToTerm, FromTerm, Eq, Ord)
@@ -800,6 +839,8 @@ isFloat _ = False
 
 -- | Test if term is an atom
 isAtom (Atom _) = True
+isAtom (AtomUtf8 _) = True
+isAtom (SmallAtomUtf8 _) = True
 isAtom _ = False
 
 -- | Test if term is a reference
@@ -813,6 +854,7 @@ isPort _ = False
 
 -- | Test if term is a pid
 isPid Pid {} = True
+isPid NewPid {} = True
 isPid _ = False
 
 -- | Test if term is a tuple
@@ -838,11 +880,14 @@ node :: Term -> Term
 node (Reference nodeName _id _creation) = atom nodeName
 node (Port nodeName _id _creation) = atom nodeName
 node (Pid nodeName _id _serial _creation) = atom nodeName
+node (NewPid nodeName _id _serial _creation) = atom nodeName
 node (NewReference nodeName _creation _ids) = atom nodeName
 node term = error $ "Bad arg for node: " ++ show term
 
 atomName :: Term -> ByteString
 atomName (Atom name) = name
+atomName (AtomUtf8 name) = name
+atomName (SmallAtomUtf8 name) = name
 atomName term = error $ "Bad arg for atomName: " ++ show term
 
 length :: Term -> Int
@@ -869,6 +914,12 @@ matchTuple _ = Nothing
 
 matchAtom :: Term -> ByteString -> Maybe ByteString
 matchAtom (Atom n) m
+  | m == n = Just n
+  | otherwise = Nothing
+matchAtom (AtomUtf8 n) m
+  | m == n = Just n
+  | otherwise = Nothing
+matchAtom (SmallAtomUtf8 n) m
   | m == n = Just n
   | otherwise = Nothing
 matchAtom _ _ = Nothing
@@ -909,6 +960,8 @@ instance Binary Term where
     putWord8 newFloatExt
     putDoublebe d
   put (Atom n) = putAtom n
+  put (AtomUtf8 n) = putAtomUtf8 n
+  put (SmallAtomUtf8 n) = putSmallAtomUtf8 n
   put (Reference nodeName id creation) = do
     putWord8 referenceExt
     putAtom nodeName
@@ -925,6 +978,12 @@ instance Binary Term where
     putWord32be id
     putWord32be serial
     putWord8 creation
+  put (NewPid nodeName id serial creation) = do
+    putWord8 newPidExt
+    putAtomUtf8 nodeName
+    putWord32be id
+    putWord32be serial
+    putWord32be creation
   put (Tuple v)
     | V.length v < 256 = do
       putWord8 smallTupleExt
@@ -966,8 +1025,21 @@ instance Binary Term where
         | tag == smallBigIntegerExt = getWord8 >>= getBigInteger . fromIntegral
         | tag == largeBigIntegerExt = getWord32be >>= getBigInteger . fromIntegral
         | tag == atomExt = Atom <$> getLength16beByteString
-        | tag == portExt = matchWord8 atomExt *> (Port <$> getLength16beByteString <*> getWord32be <*> getWord8)
-        | tag == pidExt = matchWord8 atomExt *> (Pid <$> getLength16beByteString <*> getWord32be <*> getWord32be <*> getWord8)
+        | tag == atomUtf8Ext = AtomUtf8 <$> getLength16beByteString
+        | tag == smallAtomUtf8Ext = SmallAtomUtf8 <$> getLength8ByteString
+        | tag == portExt =
+                  ((matchWord8 atomExt <|> matchWord8 atomUtf8Ext) *> (Port <$> getLength16beByteString <*> getWord32be <*> getWord8))
+                  <|> (matchWord8 smallAtomUtf8Ext *> (Port <$> getLength8ByteString <*> getWord32be <*> getWord8))
+        | tag == pidExt =
+                  ((matchWord8 atomExt <|> matchWord8 atomUtf8Ext)
+                      *> (Pid <$> getLength16beByteString <*> getWord32be <*> getWord32be <*> getWord8))
+                  <|> (matchWord8 smallAtomUtf8Ext
+                      *> (Pid <$> getLength8ByteString <*> getWord32be <*> getWord32be <*> getWord8))
+        | tag == newPidExt =
+                  ((matchWord8 atomExt <|> matchWord8 atomUtf8Ext)
+                      *> (NewPid <$> getLength16beByteString <*> getWord32be <*> getWord32be <*> getWord32be))
+                  <|> (matchWord8 smallAtomUtf8Ext
+                      *> (NewPid <$> getLength8ByteString <*> getWord32be <*> getWord32be <*> getWord32be))
         | tag == smallTupleExt = Tuple <$> (getWord8 >>= _getVector . fromIntegral)
         | tag == largeTupleExt = Tuple <$> (getWord32be >>= _getVector . fromIntegral)
         | tag == mapExt = Map <$> (getWord32be >>= _getVector . fromIntegral)
@@ -993,6 +1065,16 @@ instance Binary MapEntry where
 
 putAtom :: HasCallStack => ByteString -> Put
 putAtom a = do
+  putWord8 atomExt
+  putLength16beByteString a
+
+putAtomUtf8 :: HasCallStack => ByteString -> Put
+putAtomUtf8 a = do
+  putWord8 atomExt
+  putLength16beByteString a
+
+putSmallAtomUtf8 :: HasCallStack => ByteString -> Put
+putSmallAtomUtf8 a = do
   putWord8 atomExt
   putLength16beByteString a
 
@@ -1024,36 +1106,41 @@ smallIntegerExt,
   atomExt,
   referenceExt,
   portExt,
-  pidExt ::
-    Word8
-smallTupleExt,
+  newPidExt,
+  pidExt,
+  smallTupleExt,
   largeTupleExt,
   mapExt,
   nilExt,
   stringExt,
   listExt,
-  binaryExt ::
-    Word8
-smallBigIntegerExt,
+  binaryExt,
+  smallBigIntegerExt,
   largeBigIntegerExt,
   newReferenceExt,
   smallAtomExt,
   functionExt,
-  newFunctionExt ::
-    Word8
-exportExt,
+  newFunctionExt,
+  exportExt,
   bitBinaryExt,
   newFloatExt,
   atomUtf8Ext,
   smallAtomUtf8Ext ::
     Word8
 smallIntegerExt = 97
+
 integerExt = 98
+
 floatExt = 99
+
 atomExt = 100
+
 referenceExt = 101
+
 portExt = 102
+
 pidExt = 103
+newPidExt = 88
 
 smallTupleExt = 104
 

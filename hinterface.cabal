@@ -1,6 +1,6 @@
-cabal-version:       2.4
+cabal-version:       3.0
 name:                hinterface
-version:             3.0.0
+version:             3.1.0
 synopsis:            Haskell / Erlang interoperability library
 description:         A library for building nodes of a distributed Erlang system in Haskell.
 
@@ -16,7 +16,7 @@ license:             BSD-3-Clause
 license-file:        LICENSE
 author:              Timo Koepke, Sven Heyll
 maintainer:          timo.koepke@googlemail.com, sven.heyll@gmail.com
-copyright:           2016-2021 Timo Koepke, Sven Heyll
+copyright:           2016-2022 Timo Koepke, Sven Heyll
 category:            Language
 build-type:          Simple
 extra-source-files:  README.md, Setup.hs, .gitignore, cabal.project
