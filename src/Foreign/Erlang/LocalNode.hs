@@ -1,13 +1,13 @@
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Use camelCase" #-}
+{-# HLINT ignore "Use <$>" #-}
 
 module Foreign.Erlang.LocalNode
   ( LocalNode (),
@@ -36,13 +36,15 @@ import Control.Monad
 
 import Control.Monad.Logger
 import Control.Monad.Reader
-import qualified Data.ByteString.Char8 as CS
 import Data.Maybe (isJust)
+import Data.Text (Text)
+import qualified Data.Text as Text
 import Data.Word
 import Foreign.Erlang.Connection
 import Foreign.Erlang.ControlMessage (ControlMessage (..))
 import Foreign.Erlang.Epmd
 import Foreign.Erlang.Handshake
+import Foreign.Erlang.LocalNode.Internal
 import Foreign.Erlang.Mailbox
 import Foreign.Erlang.NodeData
 import Foreign.Erlang.NodeState
@@ -56,46 +58,13 @@ import Util.IOExtra (bracketOnErrorLog, logInfoStr, logWarnStr, requireM, tryAnd
 import Util.Socket
 import Prelude hiding (id)
 
-data LocalNodeConfig = LocalNodeConfig
-  { aliveName :: String,
-    hostName :: String,
-    cookie :: String
-  }
-  deriving (Show)
-
-newtype NodeT m a = NodeT {unNodeT :: ReaderT RegisteredNode m a}
-  deriving (Functor, Applicative, Monad, MonadUnliftIO, MonadLogger, MonadIO)
-
-deriving instance
-  (MonadUnliftIO (NodeT m), MonadResource m) =>
-  MonadResource (NodeT m)
-
-deriving instance MonadLoggerIO m => MonadLoggerIO (NodeT m)
-
-data LocalNode = LocalNode
-  { handshakeData :: HandshakeData,
-    nodeState :: NodeState Pid Term Mailbox Connection,
-    acceptorSocket :: Socket
-  }
-
-data RegisteredNode = RegisteredNode
-  { localNode :: LocalNode,
-    nodeRegistration :: NodeRegistration
-  }
-
-askLocalNode :: Monad m => NodeT m LocalNode
-askLocalNode = NodeT (asks localNode)
-
 askNodeRegistration :: Monad m => NodeT m NodeRegistration
 askNodeRegistration = NodeT (asks nodeRegistration)
 
-askCreation :: Monad m => NodeT m Word8
+askCreation :: Monad m => NodeT m Word32
 askCreation = fromIntegral . nr_creation <$> askNodeRegistration
 
-askNodeState :: Monad m => NodeT m (NodeState Pid Term Mailbox Connection)
-askNodeState = nodeState <$> askLocalNode
-
-askNodeName :: Monad m => NodeT m CS.ByteString
+askNodeName :: Monad m => NodeT m Text
 askNodeName = n_nodeName . name . handshakeData <$> askLocalNode
 
 make_pid :: MonadIO m => NodeT m Pid
@@ -104,9 +73,9 @@ make_pid = do
   state <- askNodeState
   (id, serial) <- liftIO (new_pid state)
   cr <- askCreation
-  return (pid name id serial cr)
+  return (MkPid (NewPid SmallAtomUtf8 name id serial cr))
 
-register_pid :: (MonadIO m) => Term -> Pid -> NodeT m Bool
+register_pid :: (MonadIO m) => Text -> Pid -> NodeT m Bool
 register_pid name pid' = do
   state <- askNodeState
   liftIO
@@ -122,7 +91,7 @@ make_ref = do
   name <- askNodeName
   (refId0, refId1, refId2) <- liftIO (new_ref state)
   cr <- askCreation
-  return (ref name cr [refId0, refId1, refId2])
+  return (NewerReference SmallAtomUtf8 name cr [refId0, refId1, refId2])
 
 make_port :: (MonadIO m) => NodeT m Term
 make_port = do
@@ -130,40 +99,24 @@ make_port = do
   state <- askNodeState
   id <- liftIO (new_port state)
   cr <- askCreation
-  return $ port name id cr
+  return $ NewPort SmallAtomUtf8 name id cr
 
 runNodeT ::
-  forall m a.
   (MonadResource m, MonadUnliftIO m, MonadLogger m, MonadLoggerIO m) =>
   LocalNodeConfig ->
   NodeT m a ->
   m a
-runNodeT LocalNodeConfig {aliveName, hostName, cookie} NodeT {unNodeT} = do
+runNodeT LocalNodeConfig {aliveName, hostName, cookie} action = do
   requireM "(aliveName /= \"\")" (aliveName /= "")
   requireM "(hostName /= \"\")" (hostName /= "")
   bracket setupAcceptorSock stopAllConnections acceptRegisterAndRun
   where
     setupAcceptorSock = do
-      let nodeNameBS = CS.pack (aliveName ++ "@" ++ hostName)
       (_, (acceptorSocket, portNo)) <-
         allocate
-          (serverSocket (CS.pack hostName))
+          (serverSocket hostName)
           (closeSock . fst)
-      let dFlags =
-            DistributionFlags
-              [ EXTENDED_REFERENCES,
-                FUN_TAGS,
-                NEW_FUN_TAGS,
-                EXTENDED_PIDS_PORTS,
-                BIT_BINARIES,
-                NEW_FLOATS
-              ]
-          name =
-            Name
-              { n_distVer = R6B,
-                n_distFlags = dFlags,
-                n_nodeName = nodeNameBS
-              }
+      let name = otp23Name (aliveName <> "@" <> hostName)
           nodeData =
             NodeData
               { portNo = portNo,
@@ -171,15 +124,10 @@ runNodeT LocalNodeConfig {aliveName, hostName, cookie} NodeT {unNodeT} = do
                 protocol = TcpIpV4,
                 hiVer = R6B,
                 loVer = R6B,
-                aliveName = CS.pack aliveName,
+                aliveName = aliveName,
                 extra = ""
               }
-          handshakeData =
-            HandshakeData
-              { name,
-                nodeData,
-                cookie = CS.pack cookie
-              }
+          handshakeData = HandshakeData {name, nodeData, cookie}
       nodeState <- liftIO newNodeState
       return LocalNode {acceptorSocket, handshakeData, nodeState}
 
@@ -207,20 +155,19 @@ runNodeT LocalNodeConfig {aliveName, hostName, cookie} NodeT {unNodeT} = do
                 )
                 >>= maybe
                   (return ())
-                  (void . newConnection sock nodeState . atom)
+                  (void . newConnection sock nodeState)
 
-        registerAndRun = registerNode nodeData (CS.pack hostName) go
+        registerAndRun = registerNode nodeData hostName go
           where
-            go nodeRegistration = do
+            go nodeRegistration =
               let env = RegisteredNode {localNode, nodeRegistration}
-              result <- runReaderT unNodeT env
-              return result
+               in runRegisteredNode env action
 
     stopAllConnections LocalNode {nodeState} = do
       cs <- liftIO $ getConnectedNodes nodeState
       mapM_ (liftIO . closeConnection . snd) cs
 
-make_mailbox :: (MonadResource m) => NodeT m Mailbox
+make_mailbox :: (MonadIO m) => NodeT m Mailbox
 make_mailbox = do
   self <- make_pid
   msgQueue <- newTQueueIO
@@ -235,38 +182,37 @@ send ::
   Term ->
   NodeT m ()
 send toPid message =
-  getOrCreateConnection (atomName (node (toTerm toPid)))
-    >>= maybe (return ()) (sendControlMessage (SEND toPid message))
+  maybe (return Nothing) getOrCreateConnection (nodeNameText (toTerm toPid))
+    >>= mapM_ (sendControlMessage (SEND toPid message))
 
 sendReg ::
   (MonadUnliftIO m, MonadResource m, MonadLoggerIO m) =>
   Mailbox ->
-  Term ->
-  Term ->
+  Text ->
+  Text ->
   Term ->
   NodeT m ()
-sendReg MkMailbox {self} regName nodeName message =
-  getOrCreateConnection (atomName nodeName)
-    >>= maybe (return ()) (sendControlMessage (REG_SEND self regName message))
+sendReg MkMailbox {self} regName nodeNameT message =
+  getOrCreateConnection nodeNameT
+    >>= mapM_ (sendControlMessage (REG_SEND self regName message))
 
-splitNodeName :: CS.ByteString -> (CS.ByteString, CS.ByteString)
-splitNodeName a = case CS.split '@' a of
+splitNodeName :: Text -> (Text, Text)
+splitNodeName a = case Text.splitOn "@" a of
   [alive, host] -> (alive, host)
   _ -> error $ "Illegal node name: " ++ show a
 
 getOrCreateConnection ::
   (MonadUnliftIO m, MonadResource m, MonadLoggerIO m) =>
-  CS.ByteString ->
+  Text ->
   NodeT m (Maybe Connection)
 getOrCreateConnection remoteName =
   getExistingConnection >>= maybe lookupAndConnect (return . Just)
   where
     getExistingConnection = do
-      let nodeName = atom remoteName
-      logInfoStr (printf "getExistingConnection %s" (show nodeName))
+      logInfoStr (printf "getExistingConnection %s" (Text.unpack remoteName))
       nodeState <- askNodeState
       logNodeState nodeState
-      getConnectionForNode nodeState nodeName
+      getConnectionForNode nodeState remoteName
 
     lookupAndConnect =
       lookupNode remoteAlive remoteHost
@@ -278,8 +224,8 @@ getOrCreateConnection remoteName =
           logWarnStr
             ( printf
                 "Connection failed: Node '%s' not found on '%s'."
-                (CS.unpack remoteAlive)
-                (CS.unpack remoteHost)
+                (Text.unpack remoteAlive)
+                (Text.unpack remoteHost)
             )
           return Nothing
         connect NodeData {portNo = remotePort} =
@@ -303,4 +249,4 @@ getOrCreateConnection remoteName =
                   (runPutBuffered sock)
                   (runGetBuffered sock)
                   handshakeData
-                newConnection sock nodeState (atom remoteName)
+                newConnection sock nodeState remoteName

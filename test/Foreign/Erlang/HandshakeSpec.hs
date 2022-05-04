@@ -1,16 +1,14 @@
 {-# LANGUAGE Rank2Types #-}
-{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Foreign.Erlang.HandshakeSpec (spec) where
 
 import Control.Monad.Logger
   ( MonadLogger (monadLoggerLog),
-    runStderrLoggingT,
+    runStderrLoggingT, runStdoutLoggingT
   )
 import Data.Binary
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as CS
 import qualified Data.ByteString.Lazy as LBS
 import Data.List (nub, sort)
 import Foreign.Erlang.Handshake
@@ -20,6 +18,7 @@ import Test.QuickCheck
 import UnliftIO
 import UnliftIO.Concurrent
 import Util.BufferedIOx
+import qualified Data.Text as Text
 
 spec :: Spec
 spec = do
@@ -28,7 +27,7 @@ spec = do
       property $ do
         v <- arbitraryBoundedEnum
         f <- DistributionFlags . nub . sort <$> listOf arbitraryBoundedEnum
-        n <- BS.pack <$> listOf arbitrary
+        n <- Text.pack <$> listOf arbitrary
         let a = Name v f n
         return $ (decode . encode) a `shouldBe` a
     it "encodes as expected" $
@@ -62,7 +61,7 @@ spec = do
       v <- arbitraryBoundedEnum
       f <- DistributionFlags . nub . sort <$> listOf arbitraryBoundedEnum
       c <- arbitrary
-      n <- BS.pack <$> listOf arbitrary
+      n <- Text.pack <$> listOf arbitrary
       let a = Challenge v f c n
       return $ (decode . encode) a `shouldBe` a
 
@@ -82,7 +81,8 @@ spec = do
       return $ (decode . encode) a `shouldBe` a
 
   describe "doConnect and doAccept work together" $ do
-    it "correct cookie is accepted" $ do
+
+    it "accepts a correct cookie" $ do
       let name =
             Name
               { n_distVer = R6B,
@@ -106,7 +106,7 @@ spec = do
                 cookie = "cookie"
               }
 
-      her_nodeName <- do
+      her_nodeName <- runStdoutLoggingT $ do
         buffer0 <- newBuffer
         buffer1 <- newBuffer
 
@@ -123,7 +123,7 @@ spec = do
       her_nodeName
         `shouldBe` "alive@localhost.localdomain"
 
-    it "wrong cookie is rejected" $ do
+    it "rejects the wrong cookie" $ do
       let name1 =
             Name
               { n_distVer = R6B,
@@ -169,7 +169,7 @@ spec = do
                 cookie = "cookie2"
               }
       error_message <-
-        ( do
+        runStdoutLoggingT (do
             buffer0 <- newBuffer
             buffer1 <- newBuffer
 
@@ -182,10 +182,9 @@ spec = do
             doAccept
               (runPutBuffered buffer1)
               (runGetBuffered buffer0)
-              handshakeData2
-          )
+              handshakeData2)
           `catch` ( return
-                      . CS.pack
+                      . Text.pack
                       . ( displayException ::
                             SomeException ->
                             String
@@ -211,10 +210,10 @@ instance BufferedIOx Buffer where
   writeBuffered a = liftIO . writeBuffer a
   closeBuffered = const (return ())
 
-newBuffer :: IO Buffer
+newBuffer :: MonadUnliftIO m => m Buffer
 newBuffer = Buffer <$> newIORef BS.empty
 
-readBuffer :: Buffer -> Int -> IO BS.ByteString
+readBuffer :: MonadUnliftIO m => Buffer -> Int -> m BS.ByteString
 readBuffer buffer@Buffer {bufIO} len
   | len < 0 = error $ "Bad length: " ++ show len
   | len == 0 = return BS.empty
@@ -237,7 +236,7 @@ readBuffer buffer@Buffer {bufIO} len
   )
   >>= maybe (readBuffer buffer len) return
 
-writeBuffer :: Buffer -> LBS.ByteString -> IO ()
+writeBuffer :: MonadUnliftIO m => Buffer -> LBS.ByteString -> m ()
 writeBuffer Buffer {bufIO} bytes =
   atomicModifyIORef'
   bufIO

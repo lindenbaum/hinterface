@@ -10,6 +10,7 @@ module Foreign.Erlang.NodeState
     new_pid,
     new_port,
     new_ref,
+    getMailboxes,
     putMailboxForPid,
     getMailboxForPid,
     putMailboxForName,
@@ -103,24 +104,27 @@ new_ref NodeState {refId0, refId1, refId2} =
     r
 
 --------------------------------------------------------------------------------
-putMailboxForPid :: (Ord p) => NodeState p n mb c -> p -> mb -> IO ()
+putMailboxForPid :: (Ord p, MonadUnliftIO m) => NodeState p n mb c -> p -> mb -> m ()
 putMailboxForPid NodeState {pid2Mbox} pid mbox =
   atomically $ modifyTVar' pid2Mbox (M.insert pid mbox)
 
-getMailboxForPid :: (Ord p) => NodeState p n mb c -> p -> IO (Maybe mb)
+getMailboxForPid :: (Ord p, MonadUnliftIO m) => NodeState p n mb c -> p -> m (Maybe mb)
 getMailboxForPid NodeState {pid2Mbox} pid = M.lookup pid <$> readTVarIO pid2Mbox
 
 --------------------------------------------------------------------------------
-putMailboxForName :: (Ord n) => NodeState p n mb c -> n -> mb -> IO ()
+putMailboxForName :: (Ord n, MonadUnliftIO m) => NodeState p n mb c -> n -> mb -> m ()
 putMailboxForName NodeState {name2Mbox} name mbox =
   atomically $ modifyTVar' name2Mbox (M.insert name mbox)
 
-getMailboxForName :: (Ord n) => NodeState p n mb c -> n -> IO (Maybe mb)
-getMailboxForName NodeState {name2Mbox} name =
-  M.lookup name <$> readTVarIO name2Mbox
+getMailboxForName :: (Ord n, MonadUnliftIO m) => NodeState p n mb c -> n -> m (Maybe mb)
+getMailboxForName ns name =
+  M.lookup name <$> getMailboxes ns
+
+getMailboxes :: (Ord n, MonadUnliftIO m) => NodeState p n mb c -> m (M.Map n mb)
+getMailboxes NodeState {name2Mbox} = readTVarIO name2Mbox
 
 --------------------------------------------------------------------------------
-putConnectionForNode :: (Ord n) => NodeState p n mb c -> n -> c -> IO ()
+putConnectionForNode :: (Ord n, MonadUnliftIO m) => NodeState p n mb c -> n -> c -> m ()
 putConnectionForNode NodeState {node2Conn} name conn =
   atomically $ modifyTVar' node2Conn (M.insert name conn)
 
@@ -128,11 +132,11 @@ getConnectionForNode :: (MonadIO m, Ord n) => NodeState p n mb c -> n -> m (Mayb
 getConnectionForNode NodeState {node2Conn} name =
   M.lookup name <$> liftIO (readTVarIO node2Conn)
 
-removeConnectionForNode :: (Ord n) => NodeState p n mb c -> n -> IO ()
+removeConnectionForNode :: (Ord n, MonadUnliftIO m) => NodeState p n mb c -> n -> m ()
 removeConnectionForNode NodeState {node2Conn} name =
   atomically $ modifyTVar' node2Conn (M.delete name)
 
-getConnectedNodes :: NodeState p n mb c -> IO [(n, c)]
+getConnectedNodes :: MonadUnliftIO m =>NodeState p n mb c -> m [(n, c)]
 getConnectedNodes NodeState {node2Conn} =
   M.toList <$> readTVarIO node2Conn
 

@@ -1,3 +1,6 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Use camelCase" #-}
 module Foreign.Erlang.Epmd
   ( -- * List registered nodes
     epmdNames,
@@ -9,17 +12,17 @@ module Foreign.Erlang.Epmd
     -- * Registering nodes
     registerNode,
     NodeRegistration (nr_creation),
+    mkTestingNodeRegistration,
   )
 where
 
 -- import Util.IOExtra
 
 import Control.Monad (when)
-import Control.Monad.Logger (MonadLogger)
+import Control.Monad.Logger
 import Data.Binary
 import Data.Binary.Get
 import Data.Binary.Put
-import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as CL
 import Data.Maybe
 import Foreign.Erlang.NodeData
@@ -30,6 +33,8 @@ import Util.Binary
 import Util.BufferedIOx
 import Util.IOExtra (logInfoShow)
 import Util.Socket
+import Data.Text (Text)
+import qualified Data.Text.Encoding as Text
 
 --------------------------------------------------------------------------------
 epmdPort :: Word16
@@ -77,21 +82,21 @@ instance Binary NamesResponse where
 
 -- | List all registered nodes
 epmdNames ::
-  (MonadUnliftIO m, MonadResource m, MonadLogger m) =>
+  (MonadUnliftIO m, MonadResource m, MonadLoggerIO m) =>
   -- | hostname
-  BS.ByteString ->
+  Text ->
   m NamesResponse
 epmdNames hostName = withBufferedSocket hostName (sendRequest NamesRequest)
 
 --------------------------------------------------------------------------------
-newtype LookupNodeRequest = LookupNodeRequest BS.ByteString
+newtype LookupNodeRequest = LookupNodeRequest Text
   deriving (Eq, Show)
 
 instance Binary LookupNodeRequest where
   put (LookupNodeRequest alive) =
     putWithLength16be $ do
       putWord8 port_please2_req
-      putByteString alive
+      putByteString (Text.encodeUtf8 alive)
   get = undefined
 
 newtype LookupNodeResponse = LookupNodeResponse {fromLookupNodeResponse :: Maybe NodeData}
@@ -109,11 +114,11 @@ instance Binary LookupNodeResponse where
 
 -- | Lookup a node
 lookupNode ::
-  (MonadUnliftIO m, MonadResource m, MonadLogger m) =>
+  (MonadUnliftIO m, MonadResource m, MonadLoggerIO m) =>
   -- | alive
-  BS.ByteString ->
+  Text ->
   -- | hostname
-  BS.ByteString ->
+  Text ->
   m (Maybe NodeData)
 lookupNode alive hostName =
   fromLookupNodeResponse
@@ -157,11 +162,11 @@ instance Exception NodeAlreadyRegistered
 -- | Register a node with an epmd; as long as the TCP connection is open, the
 -- registration is considered valid.
 registerNode ::
-  (MonadResource m, MonadLogger m, MonadUnliftIO m) =>
+  (MonadResource m, MonadLoggerIO m, MonadUnliftIO m) =>
   -- | node
   NodeData ->
   -- | hostName
-  BS.ByteString ->
+  Text ->
   -- | action to execute while the TCP connection is alive
   (NodeRegistration -> m a) ->
   m a
@@ -177,19 +182,22 @@ registerNode node hostName action =
       when (isNothing mr) (throwIO (NodeAlreadyRegistered node))
       action (NodeRegistration (fromJust mr))
 
+mkTestingNodeRegistration :: Word16 -> NodeRegistration
+mkTestingNodeRegistration = NodeRegistration
+
 sendRequest ::
-  (MonadLogger m, MonadUnliftIO m, MonadIO m, BufferedIOx s, Binary a, Binary b) =>
+  (MonadLoggerIO m, MonadUnliftIO m, MonadIO m, BufferedIOx s, Binary a, Binary b) =>
   a ->
   s ->
   m b
 sendRequest req sock = do
-  liftIO $ runPutBuffered sock req
+  runPutBuffered sock req
   runGetBuffered sock
 
 withBufferedSocket ::
   (MonadIO m, MonadUnliftIO m) =>
   -- | hostName
-  BS.ByteString ->
+  Text ->
   (BufferedSocket -> m b) ->
   m b
 withBufferedSocket hostName =
@@ -198,7 +206,7 @@ withBufferedSocket hostName =
 connectBufferedSocket ::
   (MonadIO m) =>
   -- | hostName
-  BS.ByteString ->
+  Text ->
   m BufferedSocket
 connectBufferedSocket hostName =
   liftIO $

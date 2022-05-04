@@ -14,41 +14,38 @@ module Foreign.Erlang.Mailbox
   )
 where
 
-import Control.Concurrent.STM
 import Foreign.Erlang.Term
+
+import UnliftIO
 
 data Mailbox = MkMailbox
   { self :: Pid,
     msgQueue :: TQueue Term
   }
 
-deliverLink :: Mailbox -> Pid -> IO ()
-deliverLink = undefined
+deliverLink :: MonadUnliftIO m => Mailbox -> Pid -> m ()
+deliverLink = error "not yet implemented: deliverLink"
 
-deliverSend :: Mailbox -> Term -> IO ()
+deliverSend :: MonadUnliftIO m => Mailbox -> Term -> m ()
 deliverSend MkMailbox {msgQueue} =
   atomically . writeTQueue msgQueue
 
-deliverExit :: Mailbox -> Pid -> Term -> IO ()
-deliverExit =
-  undefined
+deliverExit :: MonadUnliftIO m => Mailbox -> Pid -> Term -> m ()
+deliverExit = error "not yet implemented: deliverExit"
 
-deliverUnlink :: Mailbox -> Pid -> IO ()
-deliverUnlink =
-  undefined
+deliverUnlink :: MonadUnliftIO m => Mailbox -> Pid -> m ()
+deliverUnlink = error "not yet implemented: deliverUnlink"
 
-deliverRegSend :: Mailbox -> Pid -> Term -> IO ()
+deliverRegSend :: MonadUnliftIO m => Mailbox -> Pid -> Term -> m ()
 deliverRegSend MkMailbox {msgQueue} _fromPid message =
   atomically $ writeTQueue msgQueue message
 
-deliverGroupLeader :: Mailbox -> Pid -> IO ()
-deliverGroupLeader =
-  undefined
+deliverGroupLeader :: MonadUnliftIO m => Mailbox -> Pid -> m ()
+deliverGroupLeader = error "not yet implemented: deliverGroupLeader"
 
-deliverExit2 :: Mailbox -> Pid -> Term -> IO ()
-deliverExit2 =
-  undefined
+deliverExit2 :: MonadUnliftIO m => Mailbox -> Pid -> Term -> m ()
+deliverExit2 = error "not yet implemented: deliverExit2"
 
-receive :: Mailbox -> IO Term
+receive :: MonadUnliftIO m => Mailbox -> m Term
 receive MkMailbox {msgQueue} =
   atomically (readTQueue msgQueue)

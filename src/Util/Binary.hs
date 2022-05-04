@@ -10,6 +10,7 @@ module Util.Binary
     putDoublebe,
     putDoublele,
     putDoublehost,
+    putLength8ByteString,
     putLength16beByteString,
     putLength32beByteString,
     putWithLength16be,
@@ -28,13 +29,15 @@ module Util.Binary
     getWithLength16be,
     matchWord8,
     matchChar8,
-  )
+  getLength8Text, getLength16beText, putLength8Text, putLength16beText)
 where
 
 import Data.Binary.Get
 import Data.Binary.Put
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
+import Data.Text (Text)
+import qualified Data.Text.Encoding as Text
 import Data.Char
 import Data.Int (Int64)
 import Data.Word
@@ -44,6 +47,7 @@ import           Util.FloatCast
 
 import GHC.Stack (HasCallStack)
 import UnliftIO.Exception
+import qualified Data.Text as Text
 
 --------------------------------------------------------------------------------
 runGetA ::
@@ -118,15 +122,26 @@ putDoublehost = putWord64host . doubleToWord
 #endif
 
 --------------------------------------------------------------------------------
+putLength8ByteString :: HasCallStack => BS.ByteString -> Put
+putLength8ByteString bs = do
+  putWord8 (fromIntegral (BS.length bs))
+  putByteString (BS.take 255 bs)
+
 putLength16beByteString :: HasCallStack => BS.ByteString -> Put
 putLength16beByteString bs = do
   putWord16be (fromIntegral (BS.length bs))
-  putByteString bs
+  putByteString (BS.take 65535 bs)
 
 putLength32beByteString :: HasCallStack => BS.ByteString -> Put
 putLength32beByteString bs = do
   putWord32be (fromIntegral (BS.length bs))
   putByteString bs
+
+putLength8Text :: HasCallStack => Text -> Put
+putLength8Text = putLength8ByteString . Text.encodeUtf8 . Text.take 255
+
+putLength16beText :: HasCallStack => Text -> Put
+putLength16beText = putLength16beByteString . Text.encodeUtf8 . Text.take 65535
 
 --------------------------------------------------------------------------------
 putWithLength16be :: HasCallStack => Put -> Put
@@ -193,6 +208,13 @@ getDoublehost = wordToDouble <$> getWord64host
 --------------------------------------------------------------------------------
 getLength8ByteString :: HasCallStack => Get BS.ByteString
 getLength8ByteString = getWord8 >>= getByteString . fromIntegral
+
+getLength8Text :: HasCallStack => Get Text
+getLength8Text = Text.decodeUtf8 <$> (getWord8 >>= getByteString . fromIntegral)
+
+getLength16beText :: HasCallStack => Get Text
+getLength16beText =
+  Text.decodeUtf8 <$> (getWord16be >>= getByteString . fromIntegral)
 
 getLength16beByteString :: HasCallStack => Get BS.ByteString
 getLength16beByteString =

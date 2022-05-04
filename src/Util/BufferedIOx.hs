@@ -27,7 +27,7 @@ runGetBuffered ::
     BufferedIOx s,
     Binary a,
     MonadUnliftIO m,
-    MonadLogger m
+    MonadLoggerIO m
   ) =>
   s ->
   m a

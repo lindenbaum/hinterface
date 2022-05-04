@@ -14,6 +14,9 @@ where
 
 import Control.Monad
 import Control.Monad.Logger
+import qualified Data.Map as Map
+import Data.String
+import Data.Text (Text)
 import Foreign.Erlang.ControlMessage
 import Foreign.Erlang.Mailbox
 import Foreign.Erlang.NodeState
@@ -33,8 +36,8 @@ data Connection = MkConnection
 newConnection ::
   (MonadLoggerIO m, MonadUnliftIO m, BufferedIOx s) =>
   s ->
-  NodeState Pid Term Mailbox Connection ->
-  Term ->
+  NodeState Pid Text Mailbox Connection ->
+  Text ->
   m Connection
 newConnection sock nodeState name = do
   sendQueue <- newTQueueIO
@@ -78,15 +81,16 @@ sendLoop ::
 sendLoop sock sendQueue =
   forever (tryAndLogIO send)
   where
-    send = liftIO $ do
+    send = do
       controlMessage <- atomically $ readTQueue sendQueue
+      -- TODO: conditionally: logDebugN (fromString ("send-loop control-message: " ++ show controlMessage))
       runPutBuffered sock controlMessage
 
 recvLoop ::
   (MonadLoggerIO m, BufferedIOx s, MonadUnliftIO m) =>
   s ->
   TQueue ControlMessage ->
-  NodeState Pid Term Mailbox Connection ->
+  NodeState Pid Text Mailbox Connection ->
   m ()
 recvLoop sock sendQueue nodeState =
   forever
@@ -97,7 +101,10 @@ recvLoop sock sendQueue nodeState =
                    )
     )
   where
-    recv = runGetBuffered sock >>= liftIO . deliver
+    recv = do
+      msg <- runGetBuffered sock
+      -- TODO conditionally: logDebugN (fromString ("recv-loop control-message: " ++ show msg))
+      deliver msg
     deliver controlMessage =
       case controlMessage of
         TICK -> atomically $ writeTQueue sendQueue TICK
@@ -118,7 +125,17 @@ recvLoop sock sendQueue nodeState =
           return ()
         REG_SEND fromPid toName message -> do
           mailbox <- getMailboxForName nodeState toName
-          mapM_ (\mb -> deliverRegSend mb fromPid message) mailbox
+          maybe
+            ( do
+                logDebugN (fromString ("REG_SEND: mailbox " ++ show toName ++ " not found"))
+                mbs <- getMailboxes nodeState
+                logDebugN (fromString ("REG_SEND: mailboxes available: " ++ show (Map.keys mbs)))
+            )
+            ( \mb -> do
+                logDebugN (fromString ("REG_SEND: posting to mailbox " ++ show toName))
+                deliverRegSend mb fromPid message
+            )
+            mailbox
         GROUP_LEADER fromPid toPid -> do
           mailbox <- getMailboxForPid nodeState toPid
           mapM_ (`deliverGroupLeader` fromPid) mailbox

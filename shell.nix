@@ -11,6 +11,7 @@ in
   buildInputs = with pkgs.haskellPackages;
     [
       tasty-discover
+      pkgs.erlang_nox
     ];
 }
 

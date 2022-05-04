@@ -1,6 +1,6 @@
 cabal-version:       3.0
 name:                hinterface
-version:             3.1.0
+version:             4.0.0
 synopsis:            Haskell / Erlang interoperability library
 description:         A library for building nodes of a distributed Erlang system in Haskell.
 
@@ -36,6 +36,7 @@ library
                      , Foreign.Erlang.Handshake
                      , Foreign.Erlang.Term
                      , Foreign.Erlang.LocalNode
+                     , Foreign.Erlang.LocalNode.Internal
                      , Foreign.Erlang.ControlMessage
                      , Foreign.Erlang.Mailbox
                      , Foreign.Erlang.Connection
@@ -70,6 +71,58 @@ library
 
   default-language:    Haskell2010
 
+executable hinterface-echo
+  main-is:            Main.hs
+  hs-source-dirs:     echo
+  build-depends:      async
+                     , base ^>= 4.14
+                     , binary
+                     , bytestring
+                     , hinterface
+                     , monad-logger
+                     , optparse-applicative
+                     , resourcet
+                     , text
+                     , transformers
+                     , vector
+                     , unliftio
+  default-extensions:  AllowAmbiguousTypes
+                     , ConstraintKinds
+                     , DataKinds
+                     , DeriveFoldable
+                     , DeriveFunctor
+                     , DeriveGeneric
+                     , DeriveTraversable
+                     , ExistentialQuantification
+                     , FlexibleContexts
+                     , FlexibleInstances
+                     , FunctionalDependencies
+                     , GADTs
+                     , GeneralizedNewtypeDeriving
+                     , KindSignatures
+                     , LambdaCase
+                     , MultiParamTypeClasses
+                     , NamedFieldPuns
+                     , OverloadedLists
+                     , OverloadedStrings
+                     , PatternSynonyms
+                     , RankNTypes
+                     , ScopedTypeVariables
+                     , StandaloneDeriving
+                     , TemplateHaskell
+                     , TupleSections
+                     , TypeApplications
+                     , TypeFamilies
+                     , TypeInType
+                     , TypeOperators
+                     , ViewPatterns
+  other-extensions:    CPP
+                     , IncoherentInstances
+                     , Strict
+                     , StrictData
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N -O1
+  default-language:    Haskell2010
+
 test-suite hinterface-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
@@ -85,12 +138,14 @@ test-suite hinterface-test
                      , hspec-discover
                      , monad-logger
                      , resourcet
+                     , text
                      , transformers
                      , vector
                      , unliftio
   -- commented out because of https://github.com/input-output-hk/haskell.nix/issues/231
   -- build-tool-depends: hspec-discover:hspec-discover
-  other-modules:       Foreign.Erlang.NodeDataSpec
+  other-modules:       Foreign.Erlang.LocalNodeSpec
+                     , Foreign.Erlang.NodeDataSpec
                      , Foreign.Erlang.HandshakeSpec
                      , Foreign.Erlang.ControlMessageSpec
                      , Foreign.Erlang.TermSpec

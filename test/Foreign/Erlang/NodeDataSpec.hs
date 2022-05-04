@@ -46,7 +46,7 @@ spec = do
   describe "DistributionFlags" $ do
     it "decode . encode = id" $
       property $ do
-        a <- (DistributionFlags . nub . sort) <$> listOf arbitraryBoundedEnum :: Gen DistributionFlags
+        a <- DistributionFlags . nub . sort <$> listOf arbitraryBoundedEnum :: Gen DistributionFlags
         return $ (decode . encode) a `shouldBe` a
     it "[] encodes to 0x00000" $
       encode (DistributionFlags []) `shouldBe` encode (0x00000 :: Word32)
@@ -82,8 +82,8 @@ spec = do
       encode (DistributionFlags [SMALL_ATOM_TAGS]) `shouldBe` encode (0x04000 :: Word32)
     it "[UTF8_ATOMS] encodes to 0x10000" $
       encode (DistributionFlags [UTF8_ATOMS]) `shouldBe` encode (0x10000 :: Word32)
-    it "[minBound .. maxBound] encodes to 0x17FFF" $
-      encode (DistributionFlags [minBound .. maxBound]) `shouldBe` encode (0x17FFF :: Word32)
+    it "[BIG_CREATION ] encodes to 0x40000" $
+      encode (DistributionFlags [BIG_CREATION ]) `shouldBe` encode (0x40000 :: Word32)
     it "0xFFFFFFFF decodes to [minBound .. maxBound]" $
       (decode . encode) (0xFFFFFFFF :: Word32)
         `shouldBe` DistributionFlags [minBound .. maxBound]

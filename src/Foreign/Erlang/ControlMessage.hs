@@ -1,6 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE Strict #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use camelCase" #-}
 
 module Foreign.Erlang.ControlMessage (ControlMessage (..)) where
 
@@ -16,6 +18,8 @@ import Foreign.Erlang.Term
 import Test.QuickCheck
 import Util.Binary
 import Prelude hiding (length)
+import Data.Text (Text)
+import Data.String (fromString)
 
 --------------------------------------------------------------------------------
 data ControlMessage
@@ -25,7 +29,7 @@ data ControlMessage
   | EXIT Pid Pid Term -- FromPid ToPid Reason
   | UNLINK Pid Pid -- FromPid ToPid
   | NODE_LINK --
-  | REG_SEND Pid Term Term -- FromPid ToName Message
+  | REG_SEND Pid Text Term -- FromPid ToName Message
   | GROUP_LEADER Pid Pid -- FromPid ToPid
   | EXIT2 Pid Pid Term -- FromPid ToPid Reason
   deriving (Eq, Show)
@@ -49,7 +53,7 @@ instance Binary ControlMessage where
       put' NODE_LINK =
         put (MkExternalTerm (toTerm (Tuple1 nodeLinkTag)))
       put' (REG_SEND fromPid toName message) = do
-        put (MkExternalTerm (toTerm (regSendTag, fromPid, unused, toName)))
+        put (MkExternalTerm (toTerm (regSendTag, fromPid, unused, Atom AtomUtf8 toName)))
         put (MkExternalTerm (toTerm message))
       put' (GROUP_LEADER fromPid toPid) =
         put (MkExternalTerm (toTerm (groupLeaderTag, fromPid, toPid)))
@@ -103,9 +107,9 @@ instance Binary ControlMessage where
                 (_ :: Tuple1 TnodeLinkTag) <- fromTermA term
                 return NODE_LINK
               getREG_SEND = do
-                (_ :: TregSendTag, p2, _p3 :: Term, p4) <- fromTermA term
+                (_ :: TregSendTag, p2, _p3 :: Term, Atom _ toName) <- fromTermA term
                 MkExternalTerm message <- lift get
-                return (REG_SEND p2 p4 message)
+                return (REG_SEND p2 toName message)
               getGROUP_LEADER = do
                 (_ :: TgroupLeaderTag, p2, p3) <- fromTermA term
                 return (GROUP_LEADER p2 p3)
@@ -169,7 +173,7 @@ instance Arbitrary ControlMessage where
         EXIT <$> arbitrary <*> arbitrary <*> arbitrary,
         UNLINK <$> arbitrary <*> arbitrary,
         pure NODE_LINK,
-        REG_SEND <$> arbitrary <*> arbitrary <*> arbitrary,
+        REG_SEND <$> arbitrary <*> (fromString <$> arbitrary) <*> arbitrary,
         GROUP_LEADER <$> arbitrary <*> arbitrary,
         EXIT2 <$> arbitrary <*> arbitrary <*> arbitrary
       ]

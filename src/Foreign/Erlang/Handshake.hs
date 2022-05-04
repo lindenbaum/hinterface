@@ -10,6 +10,8 @@ module Foreign.Erlang.Handshake
     Challenge (..),
     ChallengeReply (..),
     ChallengeAck (..),
+    otp23Name,
+    otp23DistributionFlags,
   )
 where
 
@@ -19,15 +21,17 @@ import Data.Binary.Get
 import Data.Binary.Put
 import qualified Data.ByteString as BS
 import Data.Ix (inRange)
+import Data.Text (Text)
 import Foreign.Erlang.Digest
 import Foreign.Erlang.NodeData
 import UnliftIO
 import Util.Binary
+import qualified Data.Text.Encoding as T
 
 data HandshakeData = HandshakeData
   { name :: Name,
     nodeData :: NodeData,
-    cookie :: BS.ByteString
+    cookie :: Text
   }
 
 nodeTypeR6, challengeStatus, challengeReply, challengeAck :: Char
@@ -39,9 +43,37 @@ challengeAck = 'a'
 data Name = Name
   { n_distVer :: DistributionVersion,
     n_distFlags :: DistributionFlags,
-    n_nodeName :: BS.ByteString
+    n_nodeName :: Text
   }
   deriving (Eq, Show)
+
+-- | An Erlang OTP-23 compatible 'Name' containing the
+--   'otp23DistributionFlags'.
+otp23Name :: Text -> Name
+otp23Name n =
+  Name
+    { n_distVer = R6B,
+      n_distFlags = otp23DistributionFlags,
+      n_nodeName = n
+    }
+
+-- | The distribution flags mandatory for OTP-23.
+-- This contains 'BIG_CREATION' and 'ATOM_UTF8',
+-- so the 'Term's received using distributed Erlang
+-- contain 'NewPid's and 'AtomUtf8' terms instead of
+-- 'Pid' and 'Atom' terms.
+otp23DistributionFlags :: DistributionFlags
+otp23DistributionFlags =
+  DistributionFlags
+    [ EXTENDED_REFERENCES,
+      FUN_TAGS,
+      NEW_FUN_TAGS,
+      EXTENDED_PIDS_PORTS,
+      BIT_BINARIES,
+      NEW_FLOATS,
+      UTF8_ATOMS,
+      BIG_CREATION
+    ]
 
 instance Binary Name where
   put Name {n_distVer, n_distFlags, n_nodeName} =
@@ -49,7 +81,7 @@ instance Binary Name where
       putChar8 nodeTypeR6
       put n_distVer
       put n_distFlags
-      putByteString n_nodeName
+      putByteString (T.encodeUtf8 n_nodeName)
   get = do
     len <- getWord16be
     (((), n_distVer, n_distFlags), l) <-
@@ -57,7 +89,7 @@ instance Binary Name where
         (,,) <$> matchChar8 nodeTypeR6
           <*> get
           <*> get
-    n_nodeName <- getByteString (fromIntegral (len - l))
+    n_nodeName <- T.decodeUtf8 <$> getByteString (fromIntegral (len - l))
     return Name {n_distVer, n_distFlags, n_nodeName}
 
 data Status = Ok | OkSimultaneous | Nok | NotAllowed | Alive
@@ -88,7 +120,7 @@ data Challenge = Challenge
   { c_distVer :: DistributionVersion,
     c_distFlags :: DistributionFlags,
     c_challenge :: Word32,
-    c_nodeName :: BS.ByteString
+    c_nodeName :: Text
   }
   deriving (Eq, Show)
 
@@ -99,7 +131,7 @@ instance Binary Challenge where
       put c_distVer
       put c_distFlags
       putWord32be c_challenge
-      putByteString c_nodeName
+      putByteString (T.encodeUtf8 c_nodeName)
   get = do
     len <- getWord16be
     (((), c_distVer, c_distFlags, c_challenge), l) <-
@@ -108,7 +140,7 @@ instance Binary Challenge where
           <*> get
           <*> get
           <*> getWord32be
-    c_nodeName <- getByteString (fromIntegral (len - l))
+    c_nodeName <- T.decodeUtf8 <$> getByteString (fromIntegral (len - l))
     return Challenge {c_distVer, c_distFlags, c_challenge, c_nodeName}
 
 data ChallengeReply = ChallengeReply
@@ -180,7 +212,7 @@ doAccept ::
   (forall o. Binary o => o -> m ()) -> -- TODO
   (forall i. (Binary i) => m i) ->
   HandshakeData ->
-  m BS.ByteString
+  m Text
 doAccept send recv HandshakeData {name = Name {n_distFlags, n_nodeName}, nodeData = NodeData {loVer, hiVer}, cookie} = do
   Name {n_distVer = her_distVer, n_nodeName = her_nodeName} <- recv
   checkVersionRange her_distVer loVer hiVer
@@ -219,7 +251,7 @@ checkVersionRange herVersion lowVersion highVersion =
           }
     )
 
-checkCookie :: MonadUnliftIO m => BS.ByteString -> Word32 -> BS.ByteString -> m ()
+checkCookie :: MonadUnliftIO m => BS.ByteString -> Word32 -> Text -> m ()
 checkCookie her_digest our_challenge cookie =
   unless
     (her_digest == genDigest our_challenge cookie)

@@ -18,6 +18,7 @@ import Data.Bits
 import qualified Data.ByteString as BS
 import Data.Ix
 import Util.Binary
+import Data.Text (Text)
 
 --------------------------------------------------------------------------------
 data DistributionVersion = Zero | R4 | NeverUsed | R5C | R6 | R6B
@@ -56,6 +57,7 @@ data DistributionFlag
   | DIST_HDR_ATOM_CACHE --  The node implements atom cache in distribution header.
   | SMALL_ATOM_TAGS --  The node understand the smallAtomExt tag
   | UTF8_ATOMS --  The node understand UTF-8 encoded atoms
+  | BIG_CREATION
   deriving (Eq, Show, Enum, Bounded, Ord)
 
 newtype DistributionFlags = DistributionFlags [DistributionFlag]
@@ -99,6 +101,7 @@ toBit DIST_HDR_ATOM_CACHE =
   0x02000
 toBit SMALL_ATOM_TAGS = 0x04000
 toBit UTF8_ATOMS = 0x10000
+toBit BIG_CREATION = 0x40000
 
 --------------------------------------------------------------------------------
 data NodeType = NormalNode | HiddenNode
@@ -130,7 +133,7 @@ data NodeData = NodeData
     protocol :: NodeProtocol,
     hiVer :: DistributionVersion,
     loVer :: DistributionVersion,
-    aliveName :: BS.ByteString,
+    aliveName :: Text,
     extra :: BS.ByteString
   }
   deriving (Eq, Show)
@@ -143,7 +146,7 @@ instance Binary NodeData where
     put protocol
     put hiVer
     put loVer
-    putLength16beByteString aliveName
+    putLength16beText aliveName
     putLength16beByteString extra
   get =
     NodeData <$> getWord16be
@@ -151,5 +154,5 @@ instance Binary NodeData where
       <*> get
       <*> get
       <*> get
-      <*> getLength16beByteString
+      <*> getLength16beText
       <*> getLength16beByteString

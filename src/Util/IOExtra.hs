@@ -1,6 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -124,12 +122,12 @@ handleAndLog ::
   m a
 handleAndLog = flip catchAndLog
 
-tryAndLogIO :: (HasCallStack, MonadUnliftIO m, MonadLogger m) => m a -> m (Maybe a)
+tryAndLogIO :: (HasCallStack, MonadUnliftIO m, MonadLoggerIO m) => m a -> m (Maybe a)
 tryAndLogIO = flip catchAndLogIO (const (pure Nothing)) . fmap Just
 
 tryAndLogAll ::
   forall a m.
-  (HasCallStack, MonadUnliftIO m, MonadLogger m) =>
+  (HasCallStack, MonadUnliftIO m, MonadLoggerIO m) =>
   m a ->
   m (Maybe a)
 tryAndLogAll =
@@ -139,7 +137,7 @@ tryAndLogAll =
     . fmap Just
 
 logAndThrow ::
-  (HasCallStack, MonadUnliftIO m, MonadLogger m, Exception e) =>
+  (HasCallStack, MonadUnliftIO m, MonadLoggerIO m, Exception e) =>
   e ->
   m a
 logAndThrow e = logShow logErrorCS callStack e >> throwIO e
@@ -154,7 +152,7 @@ logErrorShow :: (HasCallStack, Show s, MonadLogger m) => s -> m ()
 logErrorShow = logShow logErrorCS callStack
 
 throwLeftM ::
-  (HasCallStack, MonadUnliftIO m, MonadLogger m, Exception e) =>
+  (HasCallStack, MonadUnliftIO m, MonadLoggerIO m, Exception e) =>
   m (Either e r) ->
   m r
 throwLeftM = (>>= either logAndThrow return)

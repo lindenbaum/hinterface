@@ -7,14 +7,14 @@ module Util.Socket
   )
 where
 
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as CS
 import Data.Word
 import Network.Socket
 import UnliftIO
+import Data.Text (Text)
+import qualified Data.Text as Text
 
 --------------------------------------------------------------------------------
-connectSocket :: BS.ByteString -> Word16 -> IO Socket
+connectSocket :: Text -> Word16 -> IO Socket
 connectSocket hostName portNumber = do
   (sock, sa) <- createSocket hostName (Just portNumber)
   handleAny (\e -> closeSock sock >> throwIO e) $ do
@@ -22,7 +22,7 @@ connectSocket hostName portNumber = do
     connect sock sa
     return sock
 
-serverSocket :: BS.ByteString -> IO (Socket, Word16)
+serverSocket :: Text -> IO (Socket, Word16)
 serverSocket hostName = do
   (sock, sa) <- createSocket hostName Nothing
   handleAny (\e -> closeSock sock >> throwIO e) $ do
@@ -43,7 +43,7 @@ closeSock = close
 
 createSocket ::
   MonadIO m =>
-  BS.ByteString ->
+  Text ->
   Maybe Word16 ->
   m (Socket, SockAddr)
 createSocket hostName portNumber =
@@ -66,6 +66,6 @@ createSocket hostName portNumber =
       (ai : _) <-
         getAddrInfo
           (Just hints)
-          (Just (CS.unpack hostName))
+          (Just (Text.unpack hostName))
           (show <$> portNumber)
       return ai
