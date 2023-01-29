@@ -1,7 +1,0 @@
-flags: {}
-extra-package-dbs: []
-packages:
-- .
-pvp-bounds: lower
-extra-deps: []
-resolver: lts-15.12

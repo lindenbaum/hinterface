@@ -1,23 +1,10 @@
-{ pkgs ? import ./nix/pkgs.nix { }
-}:
-let
-  out =
-    pkgs.haskell-nix.project {
-      src = pkgs.haskell-nix.haskellLib.cleanGit {
-        name = "hinterface";
-        src = ./.;
-      };
-      projectFileName = "cabal.project";
-      compiler-nix-name = "ghc8107";
-      pkg-def-extras = [ ];
-      modules = [{
-        packages.hinterface.doCoverage = true;
-        packages.hinterface.components.tests.hinterface-test.build-tools = [
-          out.hspec-discover
-        ];
-      }];
-    };
-
-in
-out
-
+(import
+  (
+    let lock = builtins.fromJSON (builtins.readFile ./flake.lock); in
+    fetchTarball {
+      url = "https://github.com/edolstra/flake-compat/archive/${lock.nodes.flake-compat.locked.rev}.tar.gz";
+      sha256 = lock.nodes.flake-compat.locked.narHash;
+    }
+  )
+  { src = ./.; }
+).defaultNix

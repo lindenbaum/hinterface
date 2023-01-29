@@ -10,7 +10,6 @@
 .hsenv
 *.html
 .idea
-*.lock
 *.iml
 .ideaHaskellLib
 .dir-locals.el
@@ -31,3 +30,5 @@ cabal.project.local
 .hsenv
 /result*
 /dist-newstyle
+/.direnv
+

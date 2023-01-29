@@ -1,17 +1,10 @@
-let
-  pkgs = import ./nix/pkgs.nix { };
-in
-(import ./default.nix { inherit pkgs; }).shellFor {
-  packages = p: [ p.hinterface ];
-  withHoogle = true;
-  tools = {
-    cabal = {};
-    haskell-language-server = {};
-  };
-  buildInputs = with pkgs.haskellPackages;
-    [
-      tasty-discover
-      pkgs.erlang_nox
-    ];
-}
-
+(import
+  (
+    let lock = builtins.fromJSON (builtins.readFile ./flake.lock); in
+    fetchTarball {
+      url = "https://github.com/edolstra/flake-compat/archive/${lock.nodes.flake-compat.locked.rev}.tar.gz";
+      sha256 = lock.nodes.flake-compat.locked.narHash;
+    }
+  )
+  { src = ./.; }
+).shellNix

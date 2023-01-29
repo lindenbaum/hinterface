@@ -1,6 +1,6 @@
 cabal-version:       3.0
 name:                hinterface
-version:             4.0.0
+version:             4.0.1
 synopsis:            Haskell / Erlang interoperability library
 description:         A library for building nodes of a distributed Erlang system in Haskell.
 
@@ -16,7 +16,7 @@ license:             BSD-3-Clause
 license-file:        LICENSE
 author:              Timo Koepke, Sven Heyll
 maintainer:          timo.koepke@googlemail.com, sven.heyll@gmail.com
-copyright:           2016-2022 Timo Koepke, Sven Heyll
+copyright:           2016-2023 Timo Koepke, Sven Heyll
 category:            Language
 build-type:          Simple
 extra-source-files:  README.md, Setup.hs, .gitignore, cabal.project
@@ -45,18 +45,18 @@ library
                      , FlexibleContexts
                      , PatternSynonyms
                      , ViewPatterns
-  ghc-options:         -Wall -funbox-strict-fields
+  ghc-options:         -Wall -funbox-strict-fields -fno-full-laziness
   build-depends:       QuickCheck
                      , array
                      , async
-                     , base ^>= 4.14
+                     , base >= 4.14 && < 5
                      , binary
                      , bytestring
                      , containers
-                     , cryptonite == 0.26.*
+                     , cryptonite >= 0.26 && < 1
                      , deepseq
                      , exceptions
-                     , memory == 0.15.*
+                     , memory >= 0.15 && < 1
                      , monad-logger
                      , mtl
                      , network
@@ -75,7 +75,7 @@ executable hinterface-echo
   main-is:            Main.hs
   hs-source-dirs:     echo
   build-depends:      async
-                     , base ^>= 4.14
+                     , base
                      , binary
                      , bytestring
                      , hinterface
@@ -109,6 +109,7 @@ executable hinterface-echo
                      , RankNTypes
                      , ScopedTypeVariables
                      , StandaloneDeriving
+          		     , StrictData
                      , TemplateHaskell
                      , TupleSections
                      , TypeApplications
@@ -129,7 +130,7 @@ test-suite hinterface-test
   main-is:             Spec.hs
   build-depends:       QuickCheck
                      , async
-                     , base ^>= 4.14
+                     , base
                      , binary
                      , bytestring
                      , hinterface
@@ -184,7 +185,7 @@ test-suite hinterface-test
                      , IncoherentInstances
                      , Strict
                      , StrictData
-  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N -O1
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N -O1 -fno-full-laziness
   default-language:    Haskell2010
 
 source-repository head
